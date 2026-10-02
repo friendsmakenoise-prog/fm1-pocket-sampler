@@ -28,6 +28,26 @@ int main() {
     for (float v : out) if (std::abs(v) > 0.0001f) nonZero = true;
     assert(nonZero);
 
+    // renderAdd must preserve an existing mix buffer rather than clearing it.
+    std::vector<float> mixed(256, 0.25f);
+    sampler.noteOn(0);
+    sampler.renderAdd(mixed.data(), mixed.size(), 44100);
+    bool changedAboveBase = false;
+    for (float v : mixed) if (std::abs(v - 0.25f) > 0.0001f) changedAboveBase = true;
+    assert(changedAboveBase);
+
+    // The B-Boy sampler defaults to mono per track, but can be switched to poly.
+    sampler.setMonophonic(true);
+    assert(sampler.monophonic());
+    sampler.noteOn(0);
+    sampler.noteOn(1); // should steal/cut the previous voice on this sampler track.
+    sampler.setMonophonic(false);
+    assert(!sampler.monophonic());
+    sampler.noteOn(0);
+    sampler.noteOn(1); // now both voices may overlap.
+
+    sampler.stopAllVoices();
+
     std::cout << "Sampler tests passed\n";
     return 0;
 }

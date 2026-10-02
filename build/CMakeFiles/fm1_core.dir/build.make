@@ -76,29 +76,29 @@ CMakeFiles/fm1_core.dir/core/src/WavFile.cpp.o: CMakeFiles/fm1_core.dir/flags.ma
 CMakeFiles/fm1_core.dir/core/src/WavFile.cpp.o: /Users/frien/Documents/GitHub/fm1-pocket-sampler/core/src/WavFile.cpp
 CMakeFiles/fm1_core.dir/core/src/WavFile.cpp.o: CMakeFiles/fm1_core.dir/compiler_depend.ts
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/frien/Documents/GitHub/fm1-pocket-sampler/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object CMakeFiles/fm1_core.dir/core/src/WavFile.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/fm1_core.dir/core/src/WavFile.cpp.o -MF CMakeFiles/fm1_core.dir/core/src/WavFile.cpp.o.d -o CMakeFiles/fm1_core.dir/core/src/WavFile.cpp.o -c /Users/frien/Documents/GitHub/fm1-pocket-sampler/core/src/WavFile.cpp
+	/Library/Developer/CommandLineTools/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/fm1_core.dir/core/src/WavFile.cpp.o -MF CMakeFiles/fm1_core.dir/core/src/WavFile.cpp.o.d -o CMakeFiles/fm1_core.dir/core/src/WavFile.cpp.o -c /Users/frien/Documents/GitHub/fm1-pocket-sampler/core/src/WavFile.cpp
 
 CMakeFiles/fm1_core.dir/core/src/WavFile.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/fm1_core.dir/core/src/WavFile.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/frien/Documents/GitHub/fm1-pocket-sampler/core/src/WavFile.cpp > CMakeFiles/fm1_core.dir/core/src/WavFile.cpp.i
+	/Library/Developer/CommandLineTools/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/frien/Documents/GitHub/fm1-pocket-sampler/core/src/WavFile.cpp > CMakeFiles/fm1_core.dir/core/src/WavFile.cpp.i
 
 CMakeFiles/fm1_core.dir/core/src/WavFile.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/fm1_core.dir/core/src/WavFile.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/frien/Documents/GitHub/fm1-pocket-sampler/core/src/WavFile.cpp -o CMakeFiles/fm1_core.dir/core/src/WavFile.cpp.s
+	/Library/Developer/CommandLineTools/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/frien/Documents/GitHub/fm1-pocket-sampler/core/src/WavFile.cpp -o CMakeFiles/fm1_core.dir/core/src/WavFile.cpp.s
 
 CMakeFiles/fm1_core.dir/core/src/Sampler.cpp.o: CMakeFiles/fm1_core.dir/flags.make
 CMakeFiles/fm1_core.dir/core/src/Sampler.cpp.o: /Users/frien/Documents/GitHub/fm1-pocket-sampler/core/src/Sampler.cpp
 CMakeFiles/fm1_core.dir/core/src/Sampler.cpp.o: CMakeFiles/fm1_core.dir/compiler_depend.ts
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/frien/Documents/GitHub/fm1-pocket-sampler/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Building CXX object CMakeFiles/fm1_core.dir/core/src/Sampler.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/fm1_core.dir/core/src/Sampler.cpp.o -MF CMakeFiles/fm1_core.dir/core/src/Sampler.cpp.o.d -o CMakeFiles/fm1_core.dir/core/src/Sampler.cpp.o -c /Users/frien/Documents/GitHub/fm1-pocket-sampler/core/src/Sampler.cpp
+	/Library/Developer/CommandLineTools/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/fm1_core.dir/core/src/Sampler.cpp.o -MF CMakeFiles/fm1_core.dir/core/src/Sampler.cpp.o.d -o CMakeFiles/fm1_core.dir/core/src/Sampler.cpp.o -c /Users/frien/Documents/GitHub/fm1-pocket-sampler/core/src/Sampler.cpp
 
 CMakeFiles/fm1_core.dir/core/src/Sampler.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/fm1_core.dir/core/src/Sampler.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/frien/Documents/GitHub/fm1-pocket-sampler/core/src/Sampler.cpp > CMakeFiles/fm1_core.dir/core/src/Sampler.cpp.i
+	/Library/Developer/CommandLineTools/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/frien/Documents/GitHub/fm1-pocket-sampler/core/src/Sampler.cpp > CMakeFiles/fm1_core.dir/core/src/Sampler.cpp.i
 
 CMakeFiles/fm1_core.dir/core/src/Sampler.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/fm1_core.dir/core/src/Sampler.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/frien/Documents/GitHub/fm1-pocket-sampler/core/src/Sampler.cpp -o CMakeFiles/fm1_core.dir/core/src/Sampler.cpp.s
+	/Library/Developer/CommandLineTools/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/frien/Documents/GitHub/fm1-pocket-sampler/core/src/Sampler.cpp -o CMakeFiles/fm1_core.dir/core/src/Sampler.cpp.s
 
 # Object files for target fm1_core
 fm1_core_OBJECTS = \

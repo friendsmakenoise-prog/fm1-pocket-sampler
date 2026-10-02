@@ -76,15 +76,15 @@ CMakeFiles/fm1_desktop.dir/desktop/src/main.cpp.o: CMakeFiles/fm1_desktop.dir/fl
 CMakeFiles/fm1_desktop.dir/desktop/src/main.cpp.o: /Users/frien/Documents/GitHub/fm1-pocket-sampler/desktop/src/main.cpp
 CMakeFiles/fm1_desktop.dir/desktop/src/main.cpp.o: CMakeFiles/fm1_desktop.dir/compiler_depend.ts
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/frien/Documents/GitHub/fm1-pocket-sampler/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object CMakeFiles/fm1_desktop.dir/desktop/src/main.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/fm1_desktop.dir/desktop/src/main.cpp.o -MF CMakeFiles/fm1_desktop.dir/desktop/src/main.cpp.o.d -o CMakeFiles/fm1_desktop.dir/desktop/src/main.cpp.o -c /Users/frien/Documents/GitHub/fm1-pocket-sampler/desktop/src/main.cpp
+	/Library/Developer/CommandLineTools/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/fm1_desktop.dir/desktop/src/main.cpp.o -MF CMakeFiles/fm1_desktop.dir/desktop/src/main.cpp.o.d -o CMakeFiles/fm1_desktop.dir/desktop/src/main.cpp.o -c /Users/frien/Documents/GitHub/fm1-pocket-sampler/desktop/src/main.cpp
 
 CMakeFiles/fm1_desktop.dir/desktop/src/main.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/fm1_desktop.dir/desktop/src/main.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/frien/Documents/GitHub/fm1-pocket-sampler/desktop/src/main.cpp > CMakeFiles/fm1_desktop.dir/desktop/src/main.cpp.i
+	/Library/Developer/CommandLineTools/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/frien/Documents/GitHub/fm1-pocket-sampler/desktop/src/main.cpp > CMakeFiles/fm1_desktop.dir/desktop/src/main.cpp.i
 
 CMakeFiles/fm1_desktop.dir/desktop/src/main.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/fm1_desktop.dir/desktop/src/main.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/frien/Documents/GitHub/fm1-pocket-sampler/desktop/src/main.cpp -o CMakeFiles/fm1_desktop.dir/desktop/src/main.cpp.s
+	/Library/Developer/CommandLineTools/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/frien/Documents/GitHub/fm1-pocket-sampler/desktop/src/main.cpp -o CMakeFiles/fm1_desktop.dir/desktop/src/main.cpp.s
 
 # Object files for target fm1_desktop
 fm1_desktop_OBJECTS = \

@@ -8,7 +8,7 @@ namespace fm1 {
 
 void Sampler::setSample(const SampleBuffer* sample) noexcept {
     sample_ = sample;
-    for (auto& voice : voices_) voice.active = false;
+    stopAllVoices();
 }
 
 void Sampler::setSlice(std::size_t index, Slice sliceValue) {
@@ -34,8 +34,13 @@ void Sampler::makeEqualSlices(std::size_t count) {
     }
 }
 
+void Sampler::stopAllVoices() noexcept {
+    for (auto& voice : voices_) voice.active = false;
+}
+
 void Sampler::noteOn(std::size_t sliceIndex, float velocity) {
     if (!sample_ || sliceIndex >= kMaxSlices || !slices_[sliceIndex].valid()) return;
+    if (monophonic_) stopAllVoices();
     Voice& voice = voices_[nextVoice_++ % voices_.size()];
     voice.active = true;
     voice.sliceIndex = sliceIndex;
@@ -51,7 +56,15 @@ void Sampler::noteOff(std::size_t sliceIndex) {
 }
 
 void Sampler::render(float* output, std::size_t frames, uint32_t outputSampleRate) {
-    std::fill(output, output + frames, 0.0f);
+    renderInternal(output, frames, outputSampleRate, true);
+}
+
+void Sampler::renderAdd(float* output, std::size_t frames, uint32_t outputSampleRate) {
+    renderInternal(output, frames, outputSampleRate, false);
+}
+
+void Sampler::renderInternal(float* output, std::size_t frames, uint32_t outputSampleRate, bool clearOutput) {
+    if (clearOutput) std::fill(output, output + frames, 0.0f);
     if (!sample_ || sample_->empty() || outputSampleRate == 0) return;
 
     for (auto& voice : voices_) {
@@ -83,8 +96,10 @@ void Sampler::render(float* output, std::size_t frames, uint32_t outputSampleRat
         }
     }
 
-    for (std::size_t i = 0; i < frames; ++i)
-        output[i] = std::clamp(output[i], -1.0f, 1.0f);
+    if (clearOutput) {
+        for (std::size_t i = 0; i < frames; ++i)
+            output[i] = std::clamp(output[i], -1.0f, 1.0f);
+    }
 }
 
 } // namespace fm1

@@ -1,39 +1,39 @@
-# FM-1 Pocket Sampler
+# FM-1 B-Boy Edition
 
-Experimental desktop-first sampler/sequencer firmware project targeting the M-VAVE FM-1.
+Experimental desktop-first sampler/groovebox firmware project targeting the M-VAVE FM-1.
 
-## Vision
+## The idea
 
-A pocket FM synth that behaves like a forgotten 1990s hardware sampler:
+Treat the FM-1 like a tiny late-1990s sampler that happens to contain an FM synth:
 
-- Load or record samples
-- Trim and chop samples across the FM-1 keyboard
-- Chromatic playback and slice mode
-- Characterful pitch interpolation / reduced-rate modes
-- Fast performance workflow with minimal menu diving
-- Sequencing and, later, a compact four-track looper/recorder
-- Portable DSP core shared between desktop simulator and FM-1 firmware
+- three independent sampler tracks: **SAMPLE A / B / C**
+- up to **24 chops per sample track**
+- shared hardware-minded workflow rather than a DAW-style UI
+- master trim before chopping
+- manual/lazy punch chopping
+- per-track mono/poly playback
+- destructive/resampling ideas later to work around the FM-1's tight memory budget
+- FM synthesis retained as an additional sound source for the later sequencer
 
-## Current milestone: v0.2 graphical desktop sampler
+The Akai MPC-style chop workflow is a reference point, but the interface is being redesigned around the controls actually available on the FM-1.
 
-v0.2 adds a real desktop sandbox:
+## Current milestone: v0.2.4 B-Boy Edition
 
-- Native audio output through Raylib
-- Drag-and-drop WAV loading
-- Waveform overview
-- 24 visible slices
-- Computer-keyboard and mouse triggering
-- Selected-slice start/end editing
-- Per-slice semitone tuning
-- macOS `.app` bundle build
+The desktop sandbox now includes:
 
-The portable core still provides:
-
-- mono/stereo 16-bit PCM WAV import and mono downmix
-- 24-slice model
-- 8-voice sampler playback
-- one-shot/gate/loop groundwork
-- linear interpolation
+- orange FM-1-inspired front-panel skin
+- `M-VAVE FM-1` boot screen with animated **B-BOY EDITION** spray reveal
+- WAV / MP3 / FLAC / OGG desktop import
+- 3 sample slots/tracks selected by the final three physical keys
+- independent sample, trim, chop map and mono/poly state for A/B/C
+- master START / END trim before chop generation
+- 8 / 16 / 24 / manual chop modes
+- manual punch-in markers while the master-trim preview is playing
+- auto-centred hardware zoom around the currently selected trim point or chop
+- linked slice-length editing
+- per-track MONO/POLY toggle
+- per-slice start/end, tuning and level
+- real-time mixing of the three sampler engines
 
 ## macOS quick start
 
@@ -47,50 +47,29 @@ brew install cmake
 Then from the repository folder:
 
 ```bash
+rm -rf build
 ./scripts/build-macos.sh
 ```
 
-The first build downloads and compiles the pinned Raylib 5.5 dependency automatically. See `docs/macos-build.md` for alternatives and troubleshooting.
+The script explicitly uses the active macOS SDK, builds the app, runs tests and opens the resulting `.app`.
 
-## Desktop controls
+## FM-1-style control map in v0.2.4
 
-- Drop a 16-bit PCM `.wav` onto the app window.
-- Trigger the 24 slices from the keys shown on the on-screen pads or click them.
-- Click the waveform to set the selected slice start.
-- Shift-click the waveform to set its end.
-- Up / Down: tune selected slice ±1 semitone.
-- Space: retrigger selected slice.
-- `R`: reset to 24 equal chops.
+- **MASTER** — output level
+- **SELECT** — switch between MASTER TRIM and CHOP EDIT
+- **PRESETS** — 8 / 16 / 24 / MANUAL chops
+- **ALGORITHM** — zoom; automatically centres on the active trim point/chop
+- **K1 / K2** — master start/end in TRIM, slice start/end in CHOP
+- **K3 / K4** — slice tune / level in CHOP
+- **OCT-** — linked slice length on/off
+- **OCT+** — current sample track MONO/POLY
+- **PLAY/STOP** — audition the current master-trimmed region
+- **REC** — arm manual punch chopping
+- first **24 keys** — chop triggers
+- final **3 keys** — SAMPLE A / B / C
 
-## Design principles
-
-- Desktop first; hardware later.
-- No hardware flashing until recovery/unbrick workflow is understood.
-- Keep DSP independent from the UI and platform-specific I/O.
-- Treat memory, CPU and display limits as design constraints from day one.
-- Optimise for hands-on hip-hop sampling rather than DAW-style feature density.
-
-## Repository layout
-
-```text
-core/       Portable sampler/sequencer/DSP code
-desktop/    Graphical desktop development host
-firmware/   FM-1 hardware integration (added later)
-docs/       Architecture, workflow and hardware notes
-scripts/    Convenience build scripts
-tests/      Host-side tests
-```
-
-## Build without the desktop GUI
-
-For core-only development/tests:
-
-```bash
-cmake -S . -B build-core -DFM1_BUILD_DESKTOP=OFF
-cmake --build build-core
-ctest --test-dir build-core --output-on-failure
-```
+Desktop conveniences such as mouse waveform editing and right-drag panning remain available for development, but no hardware workflow depends on them.
 
 ## Status
 
-Early experimental development. Do not flash any generated firmware to hardware yet.
+This is still a desktop simulator, **not flashable FM-1 firmware**. Hardware firmware work should wait until the recovery/unbrick route and memory map are fully understood.

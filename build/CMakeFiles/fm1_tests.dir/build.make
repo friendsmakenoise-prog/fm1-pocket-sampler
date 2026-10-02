@@ -76,15 +76,15 @@ CMakeFiles/fm1_tests.dir/tests/test_sampler.cpp.o: CMakeFiles/fm1_tests.dir/flag
 CMakeFiles/fm1_tests.dir/tests/test_sampler.cpp.o: /Users/frien/Documents/GitHub/fm1-pocket-sampler/tests/test_sampler.cpp
 CMakeFiles/fm1_tests.dir/tests/test_sampler.cpp.o: CMakeFiles/fm1_tests.dir/compiler_depend.ts
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/frien/Documents/GitHub/fm1-pocket-sampler/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object CMakeFiles/fm1_tests.dir/tests/test_sampler.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/fm1_tests.dir/tests/test_sampler.cpp.o -MF CMakeFiles/fm1_tests.dir/tests/test_sampler.cpp.o.d -o CMakeFiles/fm1_tests.dir/tests/test_sampler.cpp.o -c /Users/frien/Documents/GitHub/fm1-pocket-sampler/tests/test_sampler.cpp
+	/Library/Developer/CommandLineTools/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/fm1_tests.dir/tests/test_sampler.cpp.o -MF CMakeFiles/fm1_tests.dir/tests/test_sampler.cpp.o.d -o CMakeFiles/fm1_tests.dir/tests/test_sampler.cpp.o -c /Users/frien/Documents/GitHub/fm1-pocket-sampler/tests/test_sampler.cpp
 
 CMakeFiles/fm1_tests.dir/tests/test_sampler.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/fm1_tests.dir/tests/test_sampler.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/frien/Documents/GitHub/fm1-pocket-sampler/tests/test_sampler.cpp > CMakeFiles/fm1_tests.dir/tests/test_sampler.cpp.i
+	/Library/Developer/CommandLineTools/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/frien/Documents/GitHub/fm1-pocket-sampler/tests/test_sampler.cpp > CMakeFiles/fm1_tests.dir/tests/test_sampler.cpp.i
 
 CMakeFiles/fm1_tests.dir/tests/test_sampler.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/fm1_tests.dir/tests/test_sampler.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/frien/Documents/GitHub/fm1-pocket-sampler/tests/test_sampler.cpp -o CMakeFiles/fm1_tests.dir/tests/test_sampler.cpp.s
+	/Library/Developer/CommandLineTools/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/frien/Documents/GitHub/fm1-pocket-sampler/tests/test_sampler.cpp -o CMakeFiles/fm1_tests.dir/tests/test_sampler.cpp.s
 
 # Object files for target fm1_tests
 fm1_tests_OBJECTS = \

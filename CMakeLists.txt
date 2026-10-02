@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(fm1_pocket_sampler VERSION 0.2.0 LANGUAGES CXX)
+project(fm1_pocket_sampler VERSION 0.2.4 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -40,15 +40,15 @@ if(FM1_BUILD_DESKTOP)
     if(APPLE)
         add_executable(fm1_desktop MACOSX_BUNDLE desktop/src/main.cpp)
         set_target_properties(fm1_desktop PROPERTIES
-            MACOSX_BUNDLE_BUNDLE_NAME "FM-1 Pocket Sampler"
-            MACOSX_BUNDLE_GUI_IDENTIFIER "com.friendsmakenoise.fm1pocketsampler"
-            MACOSX_BUNDLE_SHORT_VERSION_STRING "0.2.0"
-            MACOSX_BUNDLE_BUNDLE_VERSION "0.2.0"
+            MACOSX_BUNDLE_BUNDLE_NAME "FM-1 B-Boy Edition"
+            MACOSX_BUNDLE_GUI_IDENTIFIER "com.friendsmakenoise.fm1bboyedition"
+            MACOSX_BUNDLE_SHORT_VERSION_STRING "0.2.4"
+            MACOSX_BUNDLE_BUNDLE_VERSION "0.2.4"
         )
     else()
         add_executable(fm1_desktop desktop/src/main.cpp)
     endif()
 
     target_link_libraries(fm1_desktop PRIVATE fm1_core raylib)
-    target_compile_definitions(fm1_desktop PRIVATE FM1_VERSION="0.2.0")
+    target_compile_definitions(fm1_desktop PRIVATE FM1_VERSION="0.2.4")
 endif()

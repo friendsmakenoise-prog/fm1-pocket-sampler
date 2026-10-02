@@ -20,8 +20,12 @@ public:
     void makeEqualSlices(std::size_t count);
     void noteOn(std::size_t sliceIndex, float velocity = 1.0f);
     void noteOff(std::size_t sliceIndex);
+    void stopAllVoices() noexcept;
+    void setMonophonic(bool enabled) noexcept { monophonic_ = enabled; }
+    [[nodiscard]] bool monophonic() const noexcept { return monophonic_; }
 
     void render(float* output, std::size_t frames, uint32_t outputSampleRate);
+    void renderAdd(float* output, std::size_t frames, uint32_t outputSampleRate);
 
 private:
     struct Voice {
@@ -32,10 +36,13 @@ private:
         bool gateHeld = false;
     };
 
+    void renderInternal(float* output, std::size_t frames, uint32_t outputSampleRate, bool clearOutput);
+
     const SampleBuffer* sample_ = nullptr;
     std::array<Slice, kMaxSlices> slices_{};
     std::array<Voice, kMaxVoices> voices_{};
     std::size_t nextVoice_ = 0;
+    bool monophonic_ = true;
 };
 
 } // namespace fm1
