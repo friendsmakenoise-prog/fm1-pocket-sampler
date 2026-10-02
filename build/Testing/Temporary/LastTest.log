@@ -1,10 +1,10 @@
-Start testing: Oct 03 00:12 BST
+Start testing: Oct 03 00:39 BST
 ----------------------------------------------------------
 1/1 Testing: fm1_tests
 1/1 Test: fm1_tests
 Command: "/Users/frien/Documents/GitHub/fm1-pocket-sampler/build/fm1_tests"
 Directory: /Users/frien/Documents/GitHub/fm1-pocket-sampler/build
-"fm1_tests" start time: Oct 03 00:12 BST
+"fm1_tests" start time: Oct 03 00:39 BST
 Output:
 ----------------------------------------------------------
 Sampler tests passed
@@ -12,8 +12,8 @@ Sampler tests passed
 Test time =   0.29 sec
 ----------------------------------------------------------
 Test Passed.
-"fm1_tests" end time: Oct 03 00:12 BST
+"fm1_tests" end time: Oct 03 00:39 BST
 "fm1_tests" time elapsed: 00:00:00
 ----------------------------------------------------------
 
-End testing: Oct 03 00:12 BST
+End testing: Oct 03 00:39 BST

@@ -17,7 +17,7 @@ Treat the FM-1 like a tiny late-1990s sampler that happens to contain an FM synt
 
 The Akai MPC-style chop workflow is a reference point, but the interface is being redesigned around the controls actually available on the FM-1.
 
-## Current milestone: v0.2.4 B-Boy Edition
+## Current milestone: v0.2.5 B-Boy Edition
 
 The desktop sandbox now includes:
 
@@ -34,6 +34,8 @@ The desktop sandbox now includes:
 - per-track MONO/POLY toggle
 - per-slice start/end, tuning and level
 - real-time mixing of the three sampler engines
+- MASTER TRIM audition tools on the keybed: PRE / GATE / 1SHOT / LOOP / TAIL
+- corrected F-based desktop key mapping to match the visual FM-1 keybed
 
 ## macOS quick start
 
@@ -53,7 +55,7 @@ rm -rf build
 
 The script explicitly uses the active macOS SDK, builds the app, runs tests and opens the resulting `.app`.
 
-## FM-1-style control map in v0.2.4
+## FM-1-style control map in v0.2.5
 
 - **MASTER** — output level
 - **SELECT** — switch between MASTER TRIM and CHOP EDIT
@@ -63,9 +65,10 @@ The script explicitly uses the active macOS SDK, builds the app, runs tests and 
 - **K3 / K4** — slice tune / level in CHOP
 - **OCT-** — linked slice length on/off
 - **OCT+** — current sample track MONO/POLY
-- **PLAY/STOP** — audition the current master-trimmed region
+- **PLAY/STOP** — one-shot audition / stop for the current master-trimmed region
 - **REC** — arm manual punch chopping
-- first **24 keys** — chop triggers
+- in **MASTER TRIM**, the first five white keys are **PRE / GATE / 1SHOT / LOOP / TAIL** audition tools
+- in **CHOP EDIT**, the first **24 keys** are chop triggers
 - final **3 keys** — SAMPLE A / B / C
 
 Desktop conveniences such as mouse waveform editing and right-drag panning remain available for development, but no hardware workflow depends on them.

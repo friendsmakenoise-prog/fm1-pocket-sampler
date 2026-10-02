@@ -46,6 +46,7 @@ std::atomic<float> gMasterVolume{0.82f};
 enum class ChopMode : int { Equal8 = 0, Equal16, Equal24, Manual };
 enum class ScreenPage : int { Home = 0, Edit, Fx, Env, Lfo, Arp, Seq, Global };
 enum class EditStage : int { Trim = 0, Chop };
+enum class AuditionMode : int { None = 0, Pre, Gate, OneShot, Loop, Tail };
 
 struct TrackState {
     fm1::SampleBuffer sample;
@@ -62,6 +63,10 @@ struct TrackState {
     bool linkLength = false;
     std::atomic<bool> previewPlaying{false};
     double previewPosition = 0.0;
+    std::size_t previewStart = 0;
+    std::size_t previewEnd = 0;
+    AuditionMode auditionMode = AuditionMode::None;
+    bool auditionGateHeld = false;
     std::string sourceName = "EMPTY";
 };
 
@@ -75,6 +80,8 @@ struct UiState {
     Vector2 panAnchorMouse{};
     std::size_t panAnchorStart = 0;
     std::size_t panAnchorEnd = 0;
+    int auditionKeyCode = 0;
+    bool auditionFromMouse = false;
     std::string status = "Drop audio onto SAMPLE A to begin.";
 };
 
@@ -82,11 +89,16 @@ std::array<TrackState, kTrackCount> gTracks;
 UiState gUi;
 
 const std::array<int, kMaxSlices> kTriggerKeys = {
-    KEY_Z, KEY_S, KEY_X, KEY_D, KEY_C, KEY_V,
-    KEY_G, KEY_B, KEY_H, KEY_N, KEY_J, KEY_M,
-    KEY_COMMA, KEY_L, KEY_PERIOD, KEY_SEMICOLON, KEY_SLASH,
-    KEY_Q, KEY_TWO, KEY_W, KEY_THREE, KEY_E, KEY_R, KEY_FIVE
+    // Mirrors the FM-1's F-based chromatic keybed on a two-row QWERTY layout.
+    // F F# G G# A A# B C C# D D# E | F F# G G# A A# B C C# D D# E
+    KEY_Z, KEY_S, KEY_X, KEY_D, KEY_C, KEY_F,
+    KEY_V, KEY_B, KEY_H, KEY_N, KEY_J, KEY_M,
+    KEY_Q, KEY_TWO, KEY_W, KEY_THREE, KEY_E, KEY_FIVE,
+    KEY_R, KEY_T, KEY_SIX, KEY_Y, KEY_SEVEN, KEY_U
 };
+
+const std::array<std::size_t, 5> kMasterAuditionPhysicalKeys = {0, 2, 4, 6, 7};
+const std::array<const char*, 5> kMasterAuditionLabels = {"PRE", "GATE", "1SHOT", "LOOP", "TAIL"};
 
 TrackState& activeTrack() { return gTracks[gUi.activeTrack]; }
 const TrackState& activeTrackConst() { return gTracks[gUi.activeTrack]; }
@@ -104,6 +116,35 @@ const char* chopModeLabel(ChopMode mode) {
         case ChopMode::Manual: return "MAN";
     }
     return "?";
+}
+
+const char* auditionModeLabel(AuditionMode mode) {
+    switch (mode) {
+        case AuditionMode::Pre: return "PRE";
+        case AuditionMode::Gate: return "GATE";
+        case AuditionMode::OneShot: return "1SHOT";
+        case AuditionMode::Loop: return "LOOP";
+        case AuditionMode::Tail: return "TAIL";
+        case AuditionMode::None: break;
+    }
+    return "STOP";
+}
+
+int masterAuditionOrdinal(std::size_t physicalKeyIndex) {
+    for (std::size_t i = 0; i < kMasterAuditionPhysicalKeys.size(); ++i)
+        if (kMasterAuditionPhysicalKeys[i] == physicalKeyIndex) return static_cast<int>(i);
+    return -1;
+}
+
+AuditionMode auditionModeForOrdinal(int ordinal) {
+    switch (ordinal) {
+        case 0: return AuditionMode::Pre;
+        case 1: return AuditionMode::Gate;
+        case 2: return AuditionMode::OneShot;
+        case 3: return AuditionMode::Loop;
+        case 4: return AuditionMode::Tail;
+        default: return AuditionMode::None;
+    }
 }
 
 std::string fileNameOnly(const std::string& path) {
@@ -425,14 +466,80 @@ void gainSelected(float delta) {
     autoAuditionSelected();
 }
 
+void stopPreview(TrackState& t) {
+    t.previewPlaying.store(false);
+    t.auditionMode = AuditionMode::None;
+    t.auditionGateHeld = false;
+}
+
+void stopAllPreviews() {
+    for (auto& t : gTracks) stopPreview(t);
+}
+
+void startMasterAudition(AuditionMode mode, int keyCode = 0, bool fromMouse = false) {
+    std::lock_guard<std::recursive_mutex> lock(gAudioMutex);
+    auto& t = activeTrack();
+    if (t.sample.empty() || mode == AuditionMode::None) return;
+
+    stopAllPreviews();
+    const std::size_t total = t.sample.frames();
+    const std::size_t contextFrames = static_cast<std::size_t>(t.sample.sampleRate); // 1 second PRE/TAIL context.
+
+    t.auditionMode = mode;
+    t.auditionGateHeld = mode == AuditionMode::Gate || mode == AuditionMode::Loop;
+    t.previewStart = t.masterStart;
+    t.previewEnd = t.masterEnd;
+
+    if (mode == AuditionMode::Pre) {
+        if (t.masterStart == 0) {
+            gUi.status = "PRE: no audio before MASTER START.";
+            return;
+        }
+        t.previewStart = t.masterStart > contextFrames ? t.masterStart - contextFrames : 0;
+        t.previewEnd = t.masterStart;
+    } else if (mode == AuditionMode::Tail) {
+        if (t.masterEnd >= total) {
+            gUi.status = "TAIL: no audio after MASTER END.";
+            return;
+        }
+        t.previewStart = t.masterEnd;
+        t.previewEnd = std::min(total, t.masterEnd + contextFrames);
+    }
+
+    if (t.previewEnd <= t.previewStart) return;
+    t.previewPosition = static_cast<double>(t.previewStart);
+    t.previewPlaying.store(true);
+    gUi.auditionKeyCode = keyCode;
+    gUi.auditionFromMouse = fromMouse;
+    gUi.status = std::string("MASTER AUDITION: ") + auditionModeLabel(mode) + ".";
+}
+
+void releaseMasterAuditionGateIfNeeded() {
+    std::lock_guard<std::recursive_mutex> lock(gAudioMutex);
+    auto& t = activeTrack();
+    if (!t.previewPlaying.load()) return;
+    if (t.auditionMode != AuditionMode::Gate && t.auditionMode != AuditionMode::Loop) return;
+
+    const bool released = gUi.auditionFromMouse
+        ? IsMouseButtonReleased(MOUSE_BUTTON_LEFT)
+        : (gUi.auditionKeyCode != 0 && IsKeyReleased(gUi.auditionKeyCode));
+    if (released) {
+        t.auditionGateHeld = false;
+        gUi.auditionKeyCode = 0;
+        gUi.auditionFromMouse = false;
+    }
+}
+
 void togglePreview() {
     std::lock_guard<std::recursive_mutex> lock(gAudioMutex);
     auto& t = activeTrack();
     if (t.sample.empty()) return;
-    for (auto& other : gTracks) other.previewPlaying.store(false);
-    if (t.previewPosition < static_cast<double>(t.masterStart) || t.previewPosition >= static_cast<double>(t.masterEnd))
-        t.previewPosition = static_cast<double>(t.masterStart);
-    t.previewPlaying.store(!t.previewPlaying.load());
+    if (t.previewPlaying.load()) {
+        stopPreview(t);
+        gUi.status = "Preview stopped.";
+    } else {
+        startMasterAudition(AuditionMode::OneShot);
+    }
 }
 
 std::size_t previewFrameSnapshot(const TrackState& t) {
@@ -477,12 +584,20 @@ void audioCallback(void* bufferData, unsigned int frames) {
         if (t.sample.empty() || !t.previewPlaying.load()) continue;
         const double increment = static_cast<double>(t.sample.sampleRate) / static_cast<double>(kOutputSampleRate);
         for (unsigned int frame = 0; frame < frames; ++frame) {
-            if (t.previewPosition >= static_cast<double>(t.masterEnd)) {
-                t.previewPlaying.store(false);
-                t.previewPosition = static_cast<double>(t.masterStart);
+            if ((t.auditionMode == AuditionMode::Gate || t.auditionMode == AuditionMode::Loop) && !t.auditionGateHeld) {
+                stopPreview(t);
                 break;
             }
-            const auto i0 = static_cast<std::size_t>(t.previewPosition);
+            if (t.previewPosition >= static_cast<double>(t.previewEnd)) {
+                if (t.auditionMode == AuditionMode::Loop && t.auditionGateHeld) {
+                    t.previewPosition = static_cast<double>(t.previewStart);
+                } else {
+                    stopPreview(t);
+                    break;
+                }
+            }
+            if (!t.previewPlaying.load()) break;
+            const auto i0 = std::min<std::size_t>(static_cast<std::size_t>(t.previewPosition), t.sample.frames() - 1);
             const auto i1 = std::min(i0 + 1, t.sample.frames() - 1);
             const float frac = static_cast<float>(t.previewPosition - static_cast<double>(i0));
             const float value = t.sample.mono[i0] + (t.sample.mono[i1] - t.sample.mono[i0]) * frac;
@@ -509,8 +624,10 @@ std::string loadSampleIntoActiveTrack(const std::string& path) {
         t.masterEnd = frames;
         t.selectedSlice = 0;
         t.manualMarkers.clear();
-        t.previewPlaying.store(false);
+        stopPreview(t);
         t.previewPosition = 0.0;
+        t.previewStart = 0;
+        t.previewEnd = frames;
         t.viewStart = 0;
         t.viewEnd = frames;
         t.sourceName = fileNameOnly(path);
@@ -787,8 +904,12 @@ void drawPiano(const std::vector<PianoKeyVisual>& keys, const TrackState& t) {
     for (const auto& key : keys) {
         const bool trackKey = key.index >= kMaxSlices;
         const bool sliceAssigned = !trackKey && key.index < t.activeSlices;
+        const int auditionOrdinal = gUi.editStage == EditStage::Trim && !trackKey ? masterAuditionOrdinal(key.index) : -1;
+        const AuditionMode keyAuditionMode = auditionModeForOrdinal(auditionOrdinal);
+        const bool auditionActive = auditionOrdinal >= 0 && t.previewPlaying.load() && t.auditionMode == keyAuditionMode;
         const bool selected = trackKey ? (key.index - kMaxSlices) == gUi.activeTrack
-                                       : (key.index == t.selectedSlice && sliceAssigned);
+                                       : (gUi.editStage == EditStage::Trim ? auditionActive
+                                                                          : (key.index == t.selectedSlice && sliceAssigned));
         Color fill = key.upper ? Color{148, 52, 34, 255} : Color{161, 57, 35, 255};
         if (!sliceAssigned && !trackKey) fill = Color{130, 48, 34, 255};
         if (trackKey) fill = selected ? Color{58, 44, 35, 255} : Color{83, 46, 37, 255};
@@ -809,9 +930,18 @@ void drawPiano(const std::vector<PianoKeyVisual>& keys, const TrackState& t) {
             DrawText(label, static_cast<int>(key.rect.x + 5.0f), static_cast<int>(key.rect.y + key.rect.height - 14.0f),
                      11, selected ? kMarker : kCream);
         } else {
-            const char* label = TextFormat("%02i", static_cast<int>(key.index + 1));
-            DrawText(label, static_cast<int>(key.rect.x + 4.0f), static_cast<int>(key.rect.y + key.rect.height - 13.0f), fs,
-                     Color{242, 221, 206, 220});
+            const int auditionOrdinal = gUi.editStage == EditStage::Trim ? masterAuditionOrdinal(key.index) : -1;
+            if (auditionOrdinal >= 0) {
+                const char* label = kMasterAuditionLabels[static_cast<std::size_t>(auditionOrdinal)];
+                const int auditionFs = std::string(label).size() > 4 ? 7 : 8;
+                DrawText(label, static_cast<int>(key.rect.x + (key.rect.width - MeasureText(label, auditionFs)) * 0.5f),
+                         static_cast<int>(key.rect.y + key.rect.height - 13.0f), auditionFs,
+                         Color{255, 230, 207, 235});
+            } else {
+                const char* label = TextFormat("%02i", static_cast<int>(key.index + 1));
+                DrawText(label, static_cast<int>(key.rect.x + 4.0f), static_cast<int>(key.rect.y + key.rect.height - 13.0f), fs,
+                         Color{242, 221, 206, 220});
+            }
         }
     }
 
@@ -847,8 +977,8 @@ void drawSamplerScreen(Rectangle screen, const TrackState& t,
             const double end = static_cast<double>(t.masterEnd) / t.sample.sampleRate;
             DrawText(TextFormat("MASTER %.2f-%.2fs", start, end), static_cast<int>(screen.x + 8),
                      static_cast<int>(screen.y + screen.height - 50), 11, kCream);
-            DrawText("K1 START  K2 END", static_cast<int>(screen.x + 8),
-                     static_cast<int>(screen.y + screen.height - 34), 11, kScreenGreen);
+            DrawText("K1 START K2 END | PRE GATE 1SHOT LOOP TAIL", static_cast<int>(screen.x + 8),
+                     static_cast<int>(screen.y + screen.height - 34), 9, kScreenGreen);
         } else if (t.selectedSlice < t.activeSlices) {
             const auto& s = slices[t.selectedSlice];
             const double start = static_cast<double>(s.startFrame) / t.sample.sampleRate;
@@ -864,7 +994,7 @@ void drawSamplerScreen(Rectangle screen, const TrackState& t,
     const char* voice = t.mono ? "MONO" : "POLY";
     DrawText(voice, static_cast<int>(screen.x + screen.width - MeasureText(voice, 11) - 8),
              static_cast<int>(screen.y + screen.height - 50), 11, t.mono ? kMarker : kScreenGreen);
-    const char* transport = gUi.punchArmed ? "REC PUNCH" : (t.previewPlaying.load() ? "PLAY" : "STOP");
+    const char* transport = gUi.punchArmed ? "REC PUNCH" : (t.previewPlaying.load() ? auditionModeLabel(t.auditionMode) : "STOP");
     DrawText(transport, static_cast<int>(screen.x + screen.width - MeasureText(transport, 11) - 8),
              static_cast<int>(screen.y + screen.height - 34), 11, gUi.punchArmed ? Color{233, 84, 72, 255} : kScreenGreen);
 }
@@ -878,7 +1008,7 @@ void setPage(ScreenPage page, const char* status) {
 
 int main(int argc, char** argv) {
     SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT);
-    InitWindow(kInitialWidth, kInitialHeight, "M-VAVE FM-1 B-Boy Edition v0.2.4");
+    InitWindow(kInitialWidth, kInitialHeight, "M-VAVE FM-1 B-Boy Edition v0.2.5");
     SetTargetFPS(60);
 
     for (auto& t : gTracks) t.sampler.setMonophonic(true);
@@ -961,24 +1091,43 @@ int main(int argc, char** argv) {
 
         std::size_t mousePianoIndex = 0;
         if (handlePianoMouse(pianoKeys, mousePianoIndex)) {
-            if (mousePianoIndex >= kMaxSlices) selectTrack(mousePianoIndex - kMaxSlices);
-            else {
+            if (mousePianoIndex >= kMaxSlices) {
+                selectTrack(mousePianoIndex - kMaxSlices);
+            } else {
                 auto& keyTrack = activeTrack();
-                if (gUi.punchArmed && keyTrack.previewPlaying.load()) insertManualMarker(previewFrameSnapshot(keyTrack));
-                else triggerSlice(mousePianoIndex);
+                if (gUi.editStage == EditStage::Trim) {
+                    const int ordinal = masterAuditionOrdinal(mousePianoIndex);
+                    if (ordinal >= 0) startMasterAudition(auditionModeForOrdinal(ordinal), 0, true);
+                    else gUi.status = "MASTER TRIM: use PRE / GATE / 1SHOT / LOOP / TAIL white keys.";
+                } else if (gUi.punchArmed && keyTrack.previewPlaying.load()) {
+                    insertManualMarker(previewFrameSnapshot(keyTrack));
+                } else {
+                    triggerSlice(mousePianoIndex);
+                }
             }
         }
 
         auto& t = activeTrack();
 
-        // 24 chop trigger shortcuts for desktop testing.
+        // 24 chromatic shortcuts mirror the FM-1's F-based keybed. In MASTER
+        // TRIM only the first five white keys are audition functions; no key
+        // press can accidentally kick the user back into CHOP edit.
         for (std::size_t i = 0; i < kTriggerKeys.size(); ++i) {
-            if (IsKeyPressed(kTriggerKeys[i])) {
-                if (gUi.punchArmed && t.previewPlaying.load()) insertManualMarker(previewFrameSnapshot(t));
-                else triggerSlice(i);
+            if (!IsKeyPressed(kTriggerKeys[i])) continue;
+            if (gUi.editStage == EditStage::Trim) {
+                const int ordinal = masterAuditionOrdinal(i);
+                if (ordinal >= 0) startMasterAudition(auditionModeForOrdinal(ordinal), kTriggerKeys[i], false);
+            } else if (gUi.punchArmed && t.previewPlaying.load()) {
+                insertManualMarker(previewFrameSnapshot(t));
+            } else {
+                triggerSlice(i);
             }
         }
-        if (IsKeyPressed(KEY_SPACE) && !t.sample.empty()) triggerSlice(t.selectedSlice);
+        releaseMasterAuditionGateIfNeeded();
+        if (IsKeyPressed(KEY_SPACE) && !t.sample.empty()) {
+            if (gUi.editStage == EditStage::Trim) startMasterAudition(AuditionMode::OneShot);
+            else triggerSlice(t.selectedSlice);
+        }
         if (IsKeyPressed(KEY_ENTER)) togglePreview();
 
         if (IsKeyPressed(KEY_BACKSPACE) && t.chopMode == ChopMode::Manual && t.manualMarkers.size() > 2) {
@@ -1095,7 +1244,6 @@ int main(int argc, char** argv) {
         if (buttonPressed(bottomButtons[3])) setPage(ScreenPage::Seq, "SEQ reserved for B-Boy sequencer.");
         if (buttonPressed(bottomButtons[4])) {
             togglePreview();
-            gUi.status = activeTrack().previewPlaying.load() ? "Master-trim preview playing." : "Preview stopped.";
         }
         if (buttonPressed(bottomButtons[5])) {
             auto& at = activeTrack();
@@ -1165,8 +1313,8 @@ int main(int argc, char** argv) {
         }
         drawKnob(kC[0], kR, gUi.editStage == EditStage::Trim ? "K1 M.START" : "K1 START", n1, true);
         drawKnob(kC[1], kR, gUi.editStage == EditStage::Trim ? "K2 M.END" : "K2 END", n2, true);
-        drawKnob(kC[2], kR, "K3 TUNE", n3, gUi.editStage == EditStage::Chop);
-        drawKnob(kC[3], kR, "K4 LEVEL", n4, gUi.editStage == EditStage::Chop);
+        drawKnob(kC[2], kR, gUi.editStage == EditStage::Trim ? "K3 --" : "K3 TUNE", n3, gUi.editStage == EditStage::Chop);
+        drawKnob(kC[3], kR, gUi.editStage == EditStage::Trim ? "K4 --" : "K4 LEVEL", n4, gUi.editStage == EditStage::Chop);
 
         drawButton(topButtons[0], "FX", gUi.page == ScreenPage::Fx);
         drawButton(topButtons[1], "SEL", at.linkLength);
