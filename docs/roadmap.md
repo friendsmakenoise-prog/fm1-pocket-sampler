@@ -13,11 +13,11 @@
 
 ## Phase 1 — useful desktop sampler
 
-- [ ] Real desktop audio output
+- [x] Real desktop audio output
 - [ ] MIDI note input
-- [ ] FM-1-like 24-key mapping
-- [ ] Waveform overview
-- [ ] Manual start/end editing
+- [x] FM-1-like 24-key mapping
+- [x] Waveform overview
+- [x] Manual start/end editing
 - [ ] Manual slice insertion/deletion
 - [ ] Chromatic single-sample mode
 - [ ] Coarse/fine tuning
