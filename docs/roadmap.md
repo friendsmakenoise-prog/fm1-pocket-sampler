@@ -35,10 +35,16 @@
 
 ## Phase 2 — sequencing
 
-- [ ] 3 sampler sequence tracks + FM synth track
-- [ ] live record / overdub
-- [ ] 64-step patterns
-- [ ] swing / quantise / microtiming
+- [x] 3 simultaneous sampler sequence tracks
+- [x] independent 1–64-step track lengths
+- [x] per-step chop editing
+- [x] live record / overdub
+- [x] nearest-step record quantise
+- [x] per-step velocity
+- [x] per-track mute
+- [ ] FM synth sequence track
+- [ ] swing
+- [ ] true microtiming / post-record quantise
 - [ ] pattern chain / song mode
 
 ## Phase 3 — resampling and character

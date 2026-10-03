@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(fm1_pocket_sampler VERSION 0.2.7 LANGUAGES CXX)
+project(fm1_pocket_sampler VERSION 0.3.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -10,6 +10,7 @@ enable_testing()
 add_library(fm1_core
     core/src/WavFile.cpp
     core/src/Sampler.cpp
+    core/src/Sequencer.cpp
 )
 
 target_include_directories(fm1_core PUBLIC core/include)
@@ -21,6 +22,10 @@ target_compile_options(fm1_core PRIVATE
 add_executable(fm1_tests tests/test_sampler.cpp)
 target_link_libraries(fm1_tests PRIVATE fm1_core)
 add_test(NAME fm1_tests COMMAND fm1_tests)
+
+add_executable(fm1_sequencer_tests tests/test_sequencer.cpp)
+target_link_libraries(fm1_sequencer_tests PRIVATE fm1_core)
+add_test(NAME fm1_sequencer_tests COMMAND fm1_sequencer_tests)
 
 option(FM1_BUILD_DESKTOP "Build the graphical desktop sampler" ON)
 
@@ -42,13 +47,13 @@ if(FM1_BUILD_DESKTOP)
         set_target_properties(fm1_desktop PROPERTIES
             MACOSX_BUNDLE_BUNDLE_NAME "FM-1 B-Boy Edition"
             MACOSX_BUNDLE_GUI_IDENTIFIER "com.friendsmakenoise.fm1bboyedition"
-            MACOSX_BUNDLE_SHORT_VERSION_STRING "0.2.7"
-            MACOSX_BUNDLE_BUNDLE_VERSION "0.2.7"
+            MACOSX_BUNDLE_SHORT_VERSION_STRING "0.3.0"
+            MACOSX_BUNDLE_BUNDLE_VERSION "0.3.0"
         )
     else()
         add_executable(fm1_desktop desktop/src/main.cpp)
     endif()
 
     target_link_libraries(fm1_desktop PRIVATE fm1_core raylib)
-    target_compile_definitions(fm1_desktop PRIVATE FM1_VERSION="0.2.7")
+    target_compile_definitions(fm1_desktop PRIVATE FM1_VERSION="0.3.0")
 endif()

@@ -20,11 +20,12 @@ Current modules:
 - `SampleBuffer` — convenient decoded sample abstraction for the host
 - `Sampler` — slice playback, interpolation, voices, mono/poly and additive mixing
 - `Slice` — per-chop start/end/gain/tune/playback metadata
+- `Sequencer` / `SequenceTrack` — compact 64-step A/B/C event grids, per-track length/mute and BPM timing math
 
 Planned portable modules:
 
 - `ChopMap` / sampler-track state — shared boundaries, master trim and track metadata
-- `Sequencer` — events, timing, quantisation and swing
+- sequencer swing / microtiming / FM-track event types
 - `Mixer` — track levels/pan/mutes and resampling bus
 - `Filter` / `Envelope`
 - compact hardware sample decoder (candidate: block IMA ADPCM)

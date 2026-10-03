@@ -1,21 +1,19 @@
 # FM-1 B-Boy Edition control map
 
-The desktop simulator deliberately maps sampler functions onto the physical controls available on the FM-1.
+The desktop simulator deliberately maps sampler and sequencer functions onto the physical controls available on the FM-1.
 
-## Always available
+## Sampler / edit pages
 
 | FM-1 control | Sampler function |
 |---|---|
 | MASTER | Main output volume |
-| SELECT | Toggle Edit sub-page: MASTER TRIM / CHOP EDIT |
+| SELECT | Toggle MASTER TRIM / CHOP EDIT |
 | PRESETS | 8 / 16 / 24 / MAN chop mode |
 | ALGORITHM | Waveform zoom, auto-centred on current edit focus |
-| OCT- | LINK CHOPS toggle |
+| OCT- | LINK CHOPS toggle; defaults ON |
 | OCT+ | MONO/POLY toggle for current Sample A/B/C track |
-| PLAY/STOP | Play/stop current track's master-trimmed source region |
+| PLAY/STOP | Play/stop current track master preview |
 | REC | Arm/disarm manual punch chopping |
-
-## Parameter knobs
 
 ### MASTER TRIM
 
@@ -23,10 +21,10 @@ The desktop simulator deliberately maps sampler functions onto the physical cont
 |---|---|
 | K1 | Master sample start |
 | K2 | Master sample end |
-| K3 | Master tune (semitones, affects audition and all chops on this sample track) |
+| K3 | Master tune |
 | K4 | Reserved |
 
-Chops are generated only inside the master trim region. MASTER TUNE is track-level: it changes playback pitch/speed for the source and every chop, while each chop can still add its own relative tune offset in CHOP EDIT.
+The first five white keys become PRE / GATE / 1SHOT / LOOP / TAIL audition functions.
 
 ### CHOP EDIT
 
@@ -37,43 +35,31 @@ Chops are generated only inside the master trim region. MASTER TUNE is track-lev
 | K3 | Selected chop tune |
 | K4 | Selected chop level |
 
-With LINK CHOPS enabled, K1/K2 move shared neighbouring boundaries. With LINK CHOPS disabled, they edit the selected slice independently.
+With LINK CHOPS enabled, an internal chop boundary is shared by the two neighbouring chops.
 
-## 27-key bed
+## SEQ page — v0.3.0
 
-### MASTER TRIM
+| FM-1 control | Sequencer function |
+|---|---|
+| PLAY/STOP | Start/stop all sampler sequence tracks |
+| REC | Arm live record/overdub |
+| K1 | Active track length, 1–64 steps |
+| K2 | Step edit cursor |
+| K3 | Global tempo, 40–240 BPM |
+| K4 | Event velocity |
+| OCT- | QNTZ nearest-step / CURR current-step live recording |
+| OCT+ | Mute/unmute active sequence track |
+| SEL | Clear selected step |
+| final 3 keys | Select sequence track A/B/C |
+| first 24 keys | Place/audition chop; during REC+PLAY, record chop to grid |
 
-The first five white keys are contextual audition controls:
+All sampler tracks share one 1/16-note clock but have independent loop lengths. This permits conventional patterns and simple polymetric loops without storing audio tracks.
 
-1. PRE
-2. GATE
-3. 1SHOT
-4. LOOP
-5. TAIL
+## Desktop shortcuts
 
-The final three physical keys remain SAMPLE A / B / C selectors.
+- F1 / F2 / F3 — select A / B / C
+- Space on SEQ page — PLAY/STOP
+- Backspace on SEQ page — clear selected step
+- QWERTY chop map: `Z S X D C F V B H N J M | Q 2 W 3 E 4 R T 6 Y 7 U`
 
-### CHOP EDIT
-
-- Keys 1-24: chop trigger / chop selection
-- Key 25: SAMPLE A
-- Key 26: SAMPLE B
-- Key 27: SAMPLE C
-
-Each sample track owns an independent source sample, master trim, chop layout and MONO/POLY state. The three tracks share the overall memory and voice budget in eventual firmware.
-
-## Auto-centred editing
-
-The hardware has no spare pan control in the sampler workflow. Therefore ALGORITHM zoom centres itself on the current edit target:
-
-- MASTER TRIM: midpoint of the master region; moving START/END centres on the boundary being edited
-- CHOP EDIT: selected chop midpoint; moving START/END centres on that boundary
-- selecting another chop recentres the view without changing zoom level
-
-Mouse panning in the desktop build is only a development convenience.
-
-## Desktop QWERTY mapping
-
-The 24 chromatic shortcuts begin on F and mirror the visual FM-1 bed:
-
-`Z S X D C F V B H N J M | Q 2 W 3 E 4 R T 6 Y 7 U`
+Mouse waveform editing and right-drag panning remain desktop development conveniences; the intended hardware workflow does not depend on them.

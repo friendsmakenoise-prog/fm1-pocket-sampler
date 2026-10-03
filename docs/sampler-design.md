@@ -29,7 +29,7 @@ Each track has:
 - 8 / 16 / 24 / manual chop map
 - selected chop and per-chop settings
 - MONO/POLY playback toggle
-- future track sequence data
+- its own 1–64-step sampler sequence track
 
 A typical beat might use A for a drum break, B for a musical/vocal phrase and C for a second break, bass or percussion source. The FM synth remains a separate sound source for later sequencing.
 
@@ -75,10 +75,14 @@ With LINK CHOPS disabled, START/END can be adjusted independently for deliberate
 - K3 / K4 edit per-slice tune and level
 - waveform mouse editing and manual panning are desktop-only development conveniences
 
+## Sequencer model
+
+The first sequencer milestone gives SAMPLE A/B/C independent 1–64-step loops on one shared 1/16-note clock. A step stores only a chop number and velocity. Step edit allows exact programming without live timing; REC+PLAY records/overdubs performed chops and nearest-step quantise is enabled by default. The three track lengths can differ, so simple polymetric loops are possible without extra audio memory.
+
 ## Future priorities
 
-1. chopping ergonomics and trim accuracy
-2. A/B/C sequencer tracks plus FM synth track
+1. FM synth sequence track
+2. swing and true microtiming/post-record quantise
 3. resampling/bounce
 4. memory-efficient on-device sample format
 5. small, purposeful FX set

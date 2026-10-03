@@ -1,4 +1,5 @@
 #include "fm1/Sampler.h"
+#include "fm1/Sequencer.h"
 #include "fm1/WavFile.h"
 
 #include "raylib.h"
@@ -60,7 +61,7 @@ struct TrackState {
     std::size_t viewStart = 0;
     std::size_t viewEnd = 0;
     bool mono = true;
-    bool linkChops = false;
+    bool linkChops = true;
     std::atomic<bool> previewPlaying{false};
     double previewPosition = 0.0;
     std::size_t previewStart = 0;
@@ -87,6 +88,19 @@ struct UiState {
 
 std::array<TrackState, kTrackCount> gTracks;
 UiState gUi;
+
+struct SequencerState {
+    fm1::Sequencer engine;
+    std::array<std::size_t, kTrackCount> editStep{};
+    bool running = false;
+    bool recordArmed = false;
+    bool quantizeToNearestStep = true;
+    std::uint8_t velocity = 110;
+    std::uint64_t globalStep = 0;
+    double phaseFrames = 0.0;
+};
+
+SequencerState gSeq;
 
 const std::array<int, kMaxSlices> kTriggerKeys = {
     // Mirrors the FM-1's F-based chromatic keybed on a two-row QWERTY layout.
@@ -351,6 +365,119 @@ void selectTrack(std::size_t index) {
     auto& t = activeTrack();
     if (!t.sample.empty()) centerViewOn(t, selectedFocusFrame(t));
     gUi.status = std::string("SAMPLE ") + trackLetter(index) + " selected" + (t.sample.empty() ? " (empty)." : ".");
+}
+
+std::size_t sequencerTrackStep(std::size_t trackIndex, std::uint64_t globalStep) {
+    const auto& track = gSeq.engine.track(trackIndex);
+    return track.length() == 0 ? 0 : static_cast<std::size_t>(globalStep % track.length());
+}
+
+void triggerSequencerStep(std::uint64_t globalStep) {
+    for (std::size_t trackIndex = 0; trackIndex < kTrackCount; ++trackIndex) {
+        auto& sequence = gSeq.engine.track(trackIndex);
+        if (sequence.muted()) continue;
+        const std::size_t step = sequencerTrackStep(trackIndex, globalStep);
+        const auto& event = sequence.event(step);
+        auto& samplerTrack = gTracks[trackIndex];
+        if (!event.active || samplerTrack.sample.empty() || event.sliceIndex >= samplerTrack.activeSlices) continue;
+        samplerTrack.sampler.noteOn(event.sliceIndex, static_cast<float>(event.velocity) / 127.0f);
+    }
+}
+
+void stopSequencer(bool resetPosition = true) {
+    std::lock_guard<std::recursive_mutex> lock(gAudioMutex);
+    gSeq.running = false;
+    gSeq.recordArmed = false;
+    if (resetPosition) {
+        gSeq.globalStep = 0;
+        gSeq.phaseFrames = 0.0;
+    }
+}
+
+void toggleSequencer() {
+    std::lock_guard<std::recursive_mutex> lock(gAudioMutex);
+    if (gSeq.running) {
+        stopSequencer(true);
+        gUi.status = "Sequencer stopped.";
+        return;
+    }
+    gSeq.running = true;
+    gSeq.globalStep = 0;
+    gSeq.phaseFrames = 0.0;
+    triggerSequencerStep(0);
+    gUi.status = TextFormat("Sequencer PLAY %.0f BPM.", gSeq.engine.bpm());
+}
+
+void setSequencerLength(int delta) {
+    std::lock_guard<std::recursive_mutex> lock(gAudioMutex);
+    auto& sequence = gSeq.engine.track(gUi.activeTrack);
+    const int current = static_cast<int>(sequence.length());
+    sequence.setLength(static_cast<std::size_t>(std::clamp(current + delta, 1, static_cast<int>(fm1::SequenceTrack::kMaxSteps))));
+    gSeq.editStep[gUi.activeTrack] = std::min(gSeq.editStep[gUi.activeTrack], sequence.length() - 1);
+    gUi.status = TextFormat("SEQ %s length %02i steps.", trackLetter(gUi.activeTrack), static_cast<int>(sequence.length()));
+}
+
+void nudgeSequencerEditStep(int delta) {
+    std::lock_guard<std::recursive_mutex> lock(gAudioMutex);
+    const auto length = gSeq.engine.track(gUi.activeTrack).length();
+    if (length == 0) return;
+    int next = static_cast<int>(gSeq.editStep[gUi.activeTrack]) + delta;
+    while (next < 0) next += static_cast<int>(length);
+    next %= static_cast<int>(length);
+    gSeq.editStep[gUi.activeTrack] = static_cast<std::size_t>(next);
+    gUi.status = TextFormat("SEQ %s step %02i/%02i.", trackLetter(gUi.activeTrack), next + 1, static_cast<int>(length));
+}
+
+void nudgeSequencerBpm(int delta) {
+    std::lock_guard<std::recursive_mutex> lock(gAudioMutex);
+    const double oldFrames = gSeq.engine.framesPerStep(kOutputSampleRate);
+    const double progress = oldFrames > 0.0 ? std::clamp(gSeq.phaseFrames / oldFrames, 0.0, 1.0) : 0.0;
+    gSeq.engine.setBpm(gSeq.engine.bpm() + static_cast<float>(delta));
+    const double newFrames = gSeq.engine.framesPerStep(kOutputSampleRate);
+    gSeq.phaseFrames = progress * newFrames;
+    gUi.status = TextFormat("Tempo %.0f BPM.", gSeq.engine.bpm());
+}
+
+void nudgeSequencerVelocity(int delta) {
+    std::lock_guard<std::recursive_mutex> lock(gAudioMutex);
+    int velocity = static_cast<int>(gSeq.velocity) + delta * 4;
+    velocity = std::clamp(velocity, 1, 127);
+    gSeq.velocity = static_cast<std::uint8_t>(velocity);
+    gUi.status = TextFormat("Step velocity %i.", velocity);
+}
+
+void clearCurrentSequencerStep() {
+    std::lock_guard<std::recursive_mutex> lock(gAudioMutex);
+    auto& sequence = gSeq.engine.track(gUi.activeTrack);
+    const std::size_t step = std::min(gSeq.editStep[gUi.activeTrack], sequence.length() - 1);
+    sequence.clearEvent(step);
+    gUi.status = TextFormat("SEQ %s step %02i cleared.", trackLetter(gUi.activeTrack), static_cast<int>(step + 1));
+}
+
+void sequencerKeyHit(std::size_t sliceIndex) {
+    std::lock_guard<std::recursive_mutex> lock(gAudioMutex);
+    auto& samplerTrack = activeTrack();
+    if (samplerTrack.sample.empty() || sliceIndex >= samplerTrack.activeSlices) return;
+
+    samplerTrack.selectedSlice = sliceIndex;
+    samplerTrack.sampler.noteOn(sliceIndex, static_cast<float>(gSeq.velocity) / 127.0f);
+
+    auto& sequence = gSeq.engine.track(gUi.activeTrack);
+    std::size_t step = std::min(gSeq.editStep[gUi.activeTrack], sequence.length() - 1);
+
+    if (gSeq.running && gSeq.recordArmed) {
+        std::uint64_t quantizedGlobalStep = gSeq.globalStep;
+        const double stepFrames = gSeq.engine.framesPerStep(kOutputSampleRate);
+        if (gSeq.quantizeToNearestStep && stepFrames > 0.0 && gSeq.phaseFrames >= stepFrames * 0.5)
+            ++quantizedGlobalStep;
+        step = sequencerTrackStep(gUi.activeTrack, quantizedGlobalStep);
+        gSeq.editStep[gUi.activeTrack] = step;
+        sequence.setEvent(step, sliceIndex, gSeq.velocity);
+        gUi.status = TextFormat("REC QNTZ: S%02i -> step %02i.", static_cast<int>(sliceIndex + 1), static_cast<int>(step + 1));
+    } else if (!gSeq.running) {
+        sequence.setEvent(step, sliceIndex, gSeq.velocity);
+        gUi.status = TextFormat("SEQ %s step %02i = S%02i.", trackLetter(gUi.activeTrack), static_cast<int>(step + 1), static_cast<int>(sliceIndex + 1));
+    }
 }
 
 void triggerSlice(std::size_t index) {
@@ -638,11 +765,7 @@ void insertManualMarker(std::size_t frame) {
     gUi.status = "Punch marker added.";
 }
 
-void audioCallback(void* bufferData, unsigned int frames) {
-    auto* output = static_cast<float*>(bufferData);
-    std::lock_guard<std::recursive_mutex> lock(gAudioMutex);
-    std::fill(output, output + frames, 0.0f);
-
+void renderAudioChunk(float* output, unsigned int frames) {
     for (auto& t : gTracks) t.sampler.renderAdd(output, frames, kOutputSampleRate);
 
     for (auto& t : gTracks) {
@@ -669,6 +792,41 @@ void audioCallback(void* bufferData, unsigned int frames) {
             const float value = t.sample.mono[i0] + (t.sample.mono[i1] - t.sample.mono[i0]) * frac;
             output[frame] += value * 0.75f;
             t.previewPosition += increment;
+        }
+    }
+}
+
+void audioCallback(void* bufferData, unsigned int frames) {
+    auto* output = static_cast<float*>(bufferData);
+    std::lock_guard<std::recursive_mutex> lock(gAudioMutex);
+    std::fill(output, output + frames, 0.0f);
+
+    unsigned int rendered = 0;
+    while (rendered < frames) {
+        unsigned int chunk = frames - rendered;
+
+        if (gSeq.running) {
+            const double stepFrames = gSeq.engine.framesPerStep(kOutputSampleRate);
+            if (stepFrames > 0.0) {
+                const double remaining = std::max(0.0, stepFrames - gSeq.phaseFrames);
+                const auto framesToBoundary = static_cast<unsigned int>(std::max(1.0, std::ceil(remaining)));
+                chunk = std::min(chunk, framesToBoundary);
+            }
+        }
+
+        renderAudioChunk(output + rendered, chunk);
+        rendered += chunk;
+
+        if (gSeq.running) {
+            const double stepFrames = gSeq.engine.framesPerStep(kOutputSampleRate);
+            if (stepFrames > 0.0) {
+                gSeq.phaseFrames += chunk;
+                while (gSeq.phaseFrames + 1e-9 >= stepFrames) {
+                    gSeq.phaseFrames -= stepFrames;
+                    ++gSeq.globalStep;
+                    triggerSequencerStep(gSeq.globalStep);
+                }
+            }
         }
     }
 
@@ -950,12 +1108,23 @@ void drawPiano(const std::vector<PianoKeyVisual>& keys, const TrackState& t) {
         "OP1", "OP2", "OP3", "OP4", "OP5", "OP6", "PIT", "GLO", "MONO", "POLY", ""
     };
 
+    int seqAssignedSlice = -1;
+    if (gUi.page == ScreenPage::Seq) {
+        std::lock_guard<std::recursive_mutex> lock(gAudioMutex);
+        const auto& sequence = gSeq.engine.track(gUi.activeTrack);
+        const std::size_t step = std::min(gSeq.editStep[gUi.activeTrack], sequence.length() - 1);
+        const auto& event = sequence.event(step);
+        if (event.active) seqAssignedSlice = static_cast<int>(event.sliceIndex);
+    }
+
     for (const auto& key : keys) {
         if (!key.upper) continue;
         const float ledY = key.rect.y + key.rect.height + 10.0f;
         bool selected = false;
-        if (key.index < kMaxSlices) selected = key.index == t.selectedSlice && key.index < t.activeSlices;
-        else selected = (key.index - kMaxSlices) == gUi.activeTrack;
+        if (key.index < kMaxSlices) {
+            if (gUi.page == ScreenPage::Seq) selected = static_cast<int>(key.index) == seqAssignedSlice;
+            else selected = key.index == t.selectedSlice && key.index < t.activeSlices;
+        } else selected = (key.index - kMaxSlices) == gUi.activeTrack;
         DrawCircleV(Vector2{key.rect.x + key.rect.width * 0.5f, ledY}, 2.8f,
                     selected ? kMarker : Color{87, 31, 24, 255});
         if (key.upperOrdinal >= 0 && key.upperOrdinal < static_cast<int>(upperLabels.size())) {
@@ -971,12 +1140,15 @@ void drawPiano(const std::vector<PianoKeyVisual>& keys, const TrackState& t) {
     for (const auto& key : keys) {
         const bool trackKey = key.index >= kMaxSlices;
         const bool sliceAssigned = !trackKey && key.index < t.activeSlices;
-        const int auditionOrdinal = gUi.editStage == EditStage::Trim && !trackKey ? masterAuditionOrdinal(key.index) : -1;
+        const bool trimContext = gUi.page != ScreenPage::Seq && gUi.editStage == EditStage::Trim;
+        const int auditionOrdinal = trimContext && !trackKey ? masterAuditionOrdinal(key.index) : -1;
         const AuditionMode keyAuditionMode = auditionModeForOrdinal(auditionOrdinal);
         const bool auditionActive = auditionOrdinal >= 0 && t.previewPlaying.load() && t.auditionMode == keyAuditionMode;
         const bool selected = trackKey ? (key.index - kMaxSlices) == gUi.activeTrack
-                                       : (gUi.editStage == EditStage::Trim ? auditionActive
-                                                                          : (key.index == t.selectedSlice && sliceAssigned));
+                                       : (gUi.page == ScreenPage::Seq
+                                              ? static_cast<int>(key.index) == seqAssignedSlice
+                                              : (gUi.editStage == EditStage::Trim ? auditionActive
+                                                                                  : (key.index == t.selectedSlice && sliceAssigned)));
         Color fill = key.upper ? Color{148, 52, 34, 255} : Color{161, 57, 35, 255};
         if (!sliceAssigned && !trackKey) fill = Color{130, 48, 34, 255};
         if (trackKey) fill = selected ? Color{58, 44, 35, 255} : Color{83, 46, 37, 255};
@@ -996,23 +1168,21 @@ void drawPiano(const std::vector<PianoKeyVisual>& keys, const TrackState& t) {
             const char* label = trackLetter(ti);
             DrawText(label, static_cast<int>(key.rect.x + 5.0f), static_cast<int>(key.rect.y + key.rect.height - 14.0f),
                      11, selected ? kMarker : kCream);
+        } else if (auditionOrdinal >= 0) {
+            const char* label = kMasterAuditionLabels[static_cast<std::size_t>(auditionOrdinal)];
+            const int auditionFs = std::string(label).size() > 4 ? 7 : 8;
+            DrawText(label, static_cast<int>(key.rect.x + (key.rect.width - MeasureText(label, auditionFs)) * 0.5f),
+                     static_cast<int>(key.rect.y + key.rect.height - 13.0f), auditionFs,
+                     Color{255, 230, 207, 235});
         } else {
-            const int auditionOrdinal = gUi.editStage == EditStage::Trim ? masterAuditionOrdinal(key.index) : -1;
-            if (auditionOrdinal >= 0) {
-                const char* label = kMasterAuditionLabels[static_cast<std::size_t>(auditionOrdinal)];
-                const int auditionFs = std::string(label).size() > 4 ? 7 : 8;
-                DrawText(label, static_cast<int>(key.rect.x + (key.rect.width - MeasureText(label, auditionFs)) * 0.5f),
-                         static_cast<int>(key.rect.y + key.rect.height - 13.0f), auditionFs,
-                         Color{255, 230, 207, 235});
-            } else {
-                const char* label = TextFormat("%02i", static_cast<int>(key.index + 1));
-                DrawText(label, static_cast<int>(key.rect.x + 4.0f), static_cast<int>(key.rect.y + key.rect.height - 13.0f), fs,
-                         Color{242, 221, 206, 220});
-            }
+            const char* label = TextFormat("%02i", static_cast<int>(key.index + 1));
+            DrawText(label, static_cast<int>(key.rect.x + 4.0f), static_cast<int>(key.rect.y + key.rect.height - 13.0f), fs,
+                     Color{242, 221, 206, 220});
         }
     }
 
-    DrawText("SAMPLE A / B / C", static_cast<int>(keys.back().rect.x - 124.0f),
+    DrawText(gUi.page == ScreenPage::Seq ? "SEQ TRACK A / B / C" : "SAMPLE A / B / C",
+             static_cast<int>(keys.back().rect.x - 124.0f),
              static_cast<int>(keys.back().rect.y + keys.back().rect.height + 18.0f), 10, kCream);
 }
 
@@ -1066,6 +1236,77 @@ void drawSamplerScreen(Rectangle screen, const TrackState& t,
              static_cast<int>(screen.y + screen.height - 34), 11, gUi.punchArmed ? Color{233, 84, 72, 255} : kScreenGreen);
 }
 
+void drawSequencerScreen(Rectangle screen) {
+    std::lock_guard<std::recursive_mutex> lock(gAudioMutex);
+    const auto& sequence = gSeq.engine.track(gUi.activeTrack);
+    const std::size_t length = sequence.length();
+    const std::size_t editStep = std::min(gSeq.editStep[gUi.activeTrack], length - 1);
+    const std::size_t playStep = sequencerTrackStep(gUi.activeTrack, gSeq.globalStep);
+    const std::size_t pageStart = (editStep / 16) * 16;
+
+    DrawRectangleRec(screen, kScreenBg);
+    DrawRectangleLinesEx(screen, 2.0f, Color{58, 91, 75, 255});
+    DrawText(TextFormat("SEQ %s", trackLetter(gUi.activeTrack)), static_cast<int>(screen.x + 8),
+             static_cast<int>(screen.y + 7), 13, kCream);
+    DrawText(TextFormat("%.0f BPM", gSeq.engine.bpm()), static_cast<int>(screen.x + screen.width - 66),
+             static_cast<int>(screen.y + 7), 11, kMarker);
+
+    DrawText(TextFormat("LEN %02i  EDIT %02i/%02i", static_cast<int>(length),
+                        static_cast<int>(editStep + 1), static_cast<int>(length)),
+             static_cast<int>(screen.x + 8), static_cast<int>(screen.y + 27), 10, kScreenGreen);
+
+    const float gridX = screen.x + 8.0f;
+    const float gridY = screen.y + 52.0f;
+    const float gap = 4.0f;
+    const float cellW = (screen.width - 16.0f - gap * 3.0f) / 4.0f;
+    const float cellH = 36.0f;
+
+    for (std::size_t local = 0; local < 16; ++local) {
+        const std::size_t step = pageStart + local;
+        const int col = static_cast<int>(local % 4);
+        const int row = static_cast<int>(local / 4);
+        const Rectangle cell{gridX + col * (cellW + gap), gridY + row * (cellH + gap), cellW, cellH};
+        const bool inRange = step < length;
+        const bool isEdit = inRange && step == editStep;
+        const bool isPlay = gSeq.running && inRange && step == playStep;
+        const auto& event = sequence.event(step);
+
+        Color fill = inRange ? Color{22, 37, 31, 255} : Color{18, 25, 22, 255};
+        if (event.active && inRange) fill = Color{36, 69, 52, 255};
+        DrawRectangleRounded(cell, 0.16f, 4, fill);
+        DrawRectangleRoundedLinesEx(cell, 0.16f, 4, isEdit ? 2.0f : 1.0f,
+                                    isEdit ? kMarker : (isPlay ? kCream : Color{65, 96, 79, 255}));
+        if (isPlay) DrawCircleV(Vector2{cell.x + cell.width - 7.0f, cell.y + 7.0f}, 2.5f, kMarker);
+
+        DrawText(TextFormat("%02i", static_cast<int>(step + 1)), static_cast<int>(cell.x + 4),
+                 static_cast<int>(cell.y + 4), 8, inRange ? kScreenDim : Color{48, 61, 54, 255});
+        if (event.active && inRange) {
+            DrawText(TextFormat("S%02i", static_cast<int>(event.sliceIndex + 1)), static_cast<int>(cell.x + 7),
+                     static_cast<int>(cell.y + 17), 11, kCream);
+            DrawText(TextFormat("%03i", static_cast<int>(event.velocity)), static_cast<int>(cell.x + cell.width - 25),
+                     static_cast<int>(cell.y + 19), 7, kScreenGreen);
+        }
+    }
+
+    const int bottomY = static_cast<int>(screen.y + screen.height - 58);
+    DrawText(TextFormat("A%02i B%02i C%02i", static_cast<int>(gSeq.engine.track(0).length()),
+                        static_cast<int>(gSeq.engine.track(1).length()), static_cast<int>(gSeq.engine.track(2).length())),
+             static_cast<int>(screen.x + 8), bottomY, 9, kScreenGreen);
+    DrawText(TextFormat("VEL %03i  %s", static_cast<int>(gSeq.velocity),
+                        gSeq.quantizeToNearestStep ? "QNTZ" : "CURR"),
+             static_cast<int>(screen.x + 8), bottomY + 14, 9, gSeq.quantizeToNearestStep ? kMarker : kScreenGreen);
+
+    const char* mute = sequence.muted() ? "MUTE" : "LIVE";
+    DrawText(mute, static_cast<int>(screen.x + screen.width - MeasureText(mute, 10) - 8), bottomY, 10,
+             sequence.muted() ? Color{233, 84, 72, 255} : kScreenGreen);
+    const char* transport = gSeq.recordArmed ? "REC" : (gSeq.running ? "PLAY" : "STOP");
+    DrawText(transport, static_cast<int>(screen.x + screen.width - MeasureText(transport, 10) - 8), bottomY + 14, 10,
+             gSeq.recordArmed ? Color{233, 84, 72, 255} : (gSeq.running ? kMarker : kScreenGreen));
+
+    DrawText("K1 LEN K2 STEP K3 BPM K4 VEL | SEL=CLEAR", static_cast<int>(screen.x + 8),
+             static_cast<int>(screen.y + screen.height - 16), 7, kScreenDim);
+}
+
 void setPage(ScreenPage page, const char* status) {
     gUi.page = page;
     gUi.status = status;
@@ -1075,7 +1316,7 @@ void setPage(ScreenPage page, const char* status) {
 
 int main(int argc, char** argv) {
     SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT);
-    InitWindow(kInitialWidth, kInitialHeight, "M-VAVE FM-1 B-Boy Edition v0.2.7");
+    InitWindow(kInitialWidth, kInitialHeight, "M-VAVE FM-1 B-Boy Edition v0.3.0");
     SetTargetFPS(60);
 
     for (auto& t : gTracks) t.sampler.setMonophonic(true);
@@ -1160,6 +1401,8 @@ int main(int argc, char** argv) {
         if (handlePianoMouse(pianoKeys, mousePianoIndex)) {
             if (mousePianoIndex >= kMaxSlices) {
                 selectTrack(mousePianoIndex - kMaxSlices);
+            } else if (gUi.page == ScreenPage::Seq) {
+                sequencerKeyHit(mousePianoIndex);
             } else {
                 auto& keyTrack = activeTrack();
                 if (gUi.editStage == EditStage::Trim) {
@@ -1176,12 +1419,13 @@ int main(int argc, char** argv) {
 
         auto& t = activeTrack();
 
-        // 24 chromatic shortcuts mirror the FM-1's F-based keybed. In MASTER
-        // TRIM only the first five white keys are audition functions; no key
-        // press can accidentally kick the user back into CHOP edit.
+        // The same 24-key performance map becomes step-entry/live-record input
+        // on the sequencer page. Everywhere else it retains the sampler workflow.
         for (std::size_t i = 0; i < kTriggerKeys.size(); ++i) {
             if (!IsKeyPressed(kTriggerKeys[i])) continue;
-            if (gUi.editStage == EditStage::Trim) {
+            if (gUi.page == ScreenPage::Seq) {
+                sequencerKeyHit(i);
+            } else if (gUi.editStage == EditStage::Trim) {
                 const int ordinal = masterAuditionOrdinal(i);
                 if (ordinal >= 0) startMasterAudition(auditionModeForOrdinal(ordinal), kTriggerKeys[i], false);
             } else if (gUi.punchArmed && t.previewPlaying.load()) {
@@ -1190,19 +1434,27 @@ int main(int argc, char** argv) {
                 triggerSlice(i);
             }
         }
-        releaseMasterAuditionGateIfNeeded();
-        if (IsKeyPressed(KEY_SPACE) && !t.sample.empty()) {
-            if (gUi.editStage == EditStage::Trim) startMasterAudition(AuditionMode::OneShot);
-            else triggerSlice(t.selectedSlice);
-        }
-        if (IsKeyPressed(KEY_ENTER)) togglePreview();
+        if (gUi.page != ScreenPage::Seq) releaseMasterAuditionGateIfNeeded();
 
-        if (IsKeyPressed(KEY_BACKSPACE) && t.chopMode == ChopMode::Manual && t.manualMarkers.size() > 2) {
-            if (t.selectedSlice + 1 < t.manualMarkers.size() - 1) {
-                t.manualMarkers.erase(t.manualMarkers.begin() + static_cast<long long>(t.selectedSlice + 1));
-                syncManualSlices(t);
-                t.selectedSlice = std::min(t.selectedSlice, t.activeSlices - 1);
-                gUi.status = "Manual marker deleted.";
+        if (IsKeyPressed(KEY_SPACE)) {
+            if (gUi.page == ScreenPage::Seq) toggleSequencer();
+            else if (!t.sample.empty()) {
+                if (gUi.editStage == EditStage::Trim) startMasterAudition(AuditionMode::OneShot);
+                else triggerSlice(t.selectedSlice);
+            }
+        }
+        if (IsKeyPressed(KEY_ENTER) && gUi.page != ScreenPage::Seq) togglePreview();
+
+        if (IsKeyPressed(KEY_BACKSPACE)) {
+            if (gUi.page == ScreenPage::Seq) {
+                clearCurrentSequencerStep();
+            } else if (t.chopMode == ChopMode::Manual && t.manualMarkers.size() > 2) {
+                if (t.selectedSlice + 1 < t.manualMarkers.size() - 1) {
+                    t.manualMarkers.erase(t.manualMarkers.begin() + static_cast<long long>(t.selectedSlice + 1));
+                    syncManualSlices(t);
+                    t.selectedSlice = std::min(t.selectedSlice, t.activeSlices - 1);
+                    gUi.status = "Manual marker deleted.";
+                }
             }
         }
 
@@ -1214,17 +1466,17 @@ int main(int argc, char** argv) {
         }
 
         const int selectDelta = knobDelta(selectC, leftKnobR, mouseWheel);
-        if (selectDelta != 0) {
+        if (selectDelta != 0 && gUi.page != ScreenPage::Seq) {
             gUi.editStage = gUi.editStage == EditStage::Trim ? EditStage::Chop : EditStage::Trim;
             centerViewOn(t, selectedFocusFrame(t));
             gUi.status = gUi.editStage == EditStage::Trim ? "MASTER TRIM page." : "CHOP EDIT page.";
         }
 
         const int presetsDelta = knobDelta(presetsC, leftKnobR, mouseWheel);
-        if (presetsDelta != 0) cycleChopMode(presetsDelta);
+        if (presetsDelta != 0 && gUi.page != ScreenPage::Seq) cycleChopMode(presetsDelta);
 
         const int algorithmDelta = knobDelta(algorithmC, leftKnobR, mouseWheel);
-        if (algorithmDelta != 0 && !t.sample.empty()) {
+        if (algorithmDelta != 0 && gUi.page != ScreenPage::Seq && !t.sample.empty()) {
             zoomView(t, algorithmDelta > 0 ? 0.75 : 1.333333, selectedFocusFrame(t));
             gUi.status = algorithmDelta > 0 ? "Zoom in (auto-centred)." : "Zoom out (auto-centred).";
         }
@@ -1234,7 +1486,12 @@ int main(int argc, char** argv) {
         const int k2Delta = knobDelta(kC[1], kR, mouseWheel);
         const int k3Delta = knobDelta(kC[2], kR, mouseWheel);
         const int k4Delta = knobDelta(kC[3], kR, mouseWheel);
-        if (gUi.editStage == EditStage::Trim) {
+        if (gUi.page == ScreenPage::Seq) {
+            if (k1Delta != 0) setSequencerLength(k1Delta);
+            if (k2Delta != 0) nudgeSequencerEditStep(k2Delta);
+            if (k3Delta != 0) nudgeSequencerBpm(k3Delta);
+            if (k4Delta != 0) nudgeSequencerVelocity(k4Delta);
+        } else if (gUi.editStage == EditStage::Trim) {
             if (k1Delta != 0) nudgeMasterBoundary(static_cast<long long>(editStep) * k1Delta, false);
             if (k2Delta != 0) nudgeMasterBoundary(static_cast<long long>(editStep) * k2Delta, true);
             if (k3Delta != 0) tuneMaster(static_cast<float>(k3Delta));
@@ -1246,13 +1503,26 @@ int main(int argc, char** argv) {
         }
 
         if (buttonPressed(octMinus)) {
-            t.linkChops = !t.linkChops;
-            gUi.status = t.linkChops ? "LINK CHOPS ON." : "LINK CHOPS OFF.";
+            if (gUi.page == ScreenPage::Seq) {
+                std::lock_guard<std::recursive_mutex> lock(gAudioMutex);
+                gSeq.quantizeToNearestStep = !gSeq.quantizeToNearestStep;
+                gUi.status = gSeq.quantizeToNearestStep ? "LIVE REC quantize: nearest step." : "LIVE REC: current step.";
+            } else {
+                t.linkChops = !t.linkChops;
+                gUi.status = t.linkChops ? "LINK CHOPS ON." : "LINK CHOPS OFF.";
+            }
         }
         if (buttonPressed(octPlus)) {
-            t.mono = !t.mono;
-            t.sampler.setMonophonic(t.mono);
-            gUi.status = std::string("SAMPLE ") + trackLetter(gUi.activeTrack) + (t.mono ? " MONO." : " POLY.");
+            if (gUi.page == ScreenPage::Seq) {
+                std::lock_guard<std::recursive_mutex> lock(gAudioMutex);
+                auto& sequence = gSeq.engine.track(gUi.activeTrack);
+                sequence.setMuted(!sequence.muted());
+                gUi.status = std::string("SEQ ") + trackLetter(gUi.activeTrack) + (sequence.muted() ? " muted." : " live.");
+            } else {
+                t.mono = !t.mono;
+                t.sampler.setMonophonic(t.mono);
+                gUi.status = std::string("SAMPLE ") + trackLetter(gUi.activeTrack) + (t.mono ? " MONO." : " POLY.");
+            }
         }
 
         // Mouse waveform manipulation remains as a desktop convenience; hardware zoom is auto-centred.
@@ -1298,8 +1568,11 @@ int main(int argc, char** argv) {
 
         if (buttonPressed(topButtons[0])) setPage(ScreenPage::Fx, "FX page reserved for sampler/filter effects.");
         if (buttonPressed(topButtons[1])) {
-            t.linkChops = !t.linkChops;
-            gUi.status = t.linkChops ? "LINK CHOPS ON." : "LINK CHOPS OFF.";
+            if (gUi.page == ScreenPage::Seq) clearCurrentSequencerStep();
+            else {
+                t.linkChops = !t.linkChops;
+                gUi.status = t.linkChops ? "LINK CHOPS ON." : "LINK CHOPS OFF.";
+            }
         }
         if (buttonPressed(topButtons[2])) setPage(ScreenPage::Env, "ENV page reserved for amp/filter envelopes.");
         if (buttonPressed(topButtons[3])) setPage(ScreenPage::Lfo, "LFO page reserved for modulation.");
@@ -1309,19 +1582,42 @@ int main(int argc, char** argv) {
         if (buttonPressed(bottomButtons[0])) setPage(ScreenPage::Home, "Sampler home.");
         if (buttonPressed(bottomButtons[1])) gUi.status = "SAVE reserved for bank/project save.";
         if (buttonPressed(bottomButtons[2])) setPage(ScreenPage::Arp, "ARP reserved for note-repeat / performance tools.");
-        if (buttonPressed(bottomButtons[3])) setPage(ScreenPage::Seq, "SEQ reserved for B-Boy sequencer.");
+        if (buttonPressed(bottomButtons[3])) setPage(ScreenPage::Seq, "SEQ: K1 length, K2 step, K3 BPM, K4 velocity.");
         if (buttonPressed(bottomButtons[4])) {
-            togglePreview();
+            if (gUi.page == ScreenPage::Seq) toggleSequencer();
+            else togglePreview();
         }
         if (buttonPressed(bottomButtons[5])) {
-            auto& at = activeTrack();
-            if (at.chopMode != ChopMode::Manual) setChopMode(at, ChopMode::Manual);
-            gUi.editStage = EditStage::Chop;
-            gUi.punchArmed = !gUi.punchArmed;
-            gUi.status = gUi.punchArmed ? "Punch armed. PLAY then tap chop keys." : "Punch disarmed.";
+            if (gUi.page == ScreenPage::Seq) {
+                std::lock_guard<std::recursive_mutex> lock(gAudioMutex);
+                gSeq.recordArmed = !gSeq.recordArmed;
+                gUi.status = gSeq.recordArmed ? "SEQ REC armed: live hits write to grid." : "SEQ REC disarmed.";
+            } else {
+                auto& at = activeTrack();
+                if (at.chopMode != ChopMode::Manual) setChopMode(at, ChopMode::Manual);
+                gUi.editStage = EditStage::Chop;
+                gUi.punchArmed = !gUi.punchArmed;
+                gUi.status = gUi.punchArmed ? "Punch armed. PLAY then tap chop keys." : "Punch disarmed.";
+            }
         }
 
         const auto slices = snapshotSlices(activeTrack());
+        bool seqRunning = false, seqRecordArmed = false, seqQuantize = true, seqMuted = false;
+        float seqBpm = 90.0f;
+        std::size_t seqLength = 16, seqEdit = 0;
+        int seqVelocity = 110;
+        {
+            std::lock_guard<std::recursive_mutex> lock(gAudioMutex);
+            const auto& sequence = gSeq.engine.track(gUi.activeTrack);
+            seqRunning = gSeq.running;
+            seqRecordArmed = gSeq.recordArmed;
+            seqQuantize = gSeq.quantizeToNearestStep;
+            seqMuted = sequence.muted();
+            seqBpm = gSeq.engine.bpm();
+            seqLength = sequence.length();
+            seqEdit = std::min(gSeq.editStep[gUi.activeTrack], seqLength - 1);
+            seqVelocity = static_cast<int>(gSeq.velocity);
+        }
 
         BeginDrawing();
         ClearBackground(Color{24, 17, 15, 255});
@@ -1336,17 +1632,19 @@ int main(int argc, char** argv) {
                  static_cast<int>(15.0f * scale), kPanelInk);
 
         drawKnob(masterC, leftKnobR, "MASTER", gMasterVolume.load());
-        drawKnob(selectC, leftKnobR, "SELECT", gUi.editStage == EditStage::Chop ? 1.0f : 0.0f);
-        drawKnob(presetsC, leftKnobR, "PRESETS", static_cast<float>(static_cast<int>(activeTrack().chopMode)) / 3.0f);
+        drawKnob(selectC, leftKnobR, "SELECT", gUi.page == ScreenPage::Seq ? 0.5f : (gUi.editStage == EditStage::Chop ? 1.0f : 0.0f));
+        drawKnob(presetsC, leftKnobR, "PRESETS", gUi.page == ScreenPage::Seq ? 0.5f : static_cast<float>(static_cast<int>(activeTrack().chopMode)) / 3.0f);
         const float zoomNorm = activeTrack().sample.empty() || activeTrack().viewEnd <= activeTrack().viewStart
             ? 0.0f : 1.0f - static_cast<float>(activeTrack().viewEnd - activeTrack().viewStart) / static_cast<float>(activeTrack().sample.frames());
-        drawKnob(algorithmC, leftKnobR, "ALGORITHM", zoomNorm);
+        drawKnob(algorithmC, leftKnobR, "ALGORITHM", gUi.page == ScreenPage::Seq ? 0.5f : zoomNorm);
 
-        drawButton(octMinus, "OCT-", activeTrack().linkChops);
-        drawButton(octPlus, "OCT+", activeTrack().mono);
-        DrawText("LINK", static_cast<int>(octMinus.x + 17.0f * scale), static_cast<int>(octMinus.y + 36.0f * scale),
+        drawButton(octMinus, "OCT-", gUi.page == ScreenPage::Seq ? seqQuantize : activeTrack().linkChops);
+        drawButton(octPlus, "OCT+", gUi.page == ScreenPage::Seq ? seqMuted : activeTrack().mono);
+        const char* octMinusLabel = gUi.page == ScreenPage::Seq ? "QNTZ" : "LINK";
+        const char* octPlusLabel = gUi.page == ScreenPage::Seq ? "MUTE" : (activeTrack().mono ? "MONO" : "POLY");
+        DrawText(octMinusLabel, static_cast<int>(octMinus.x + 13.0f * scale), static_cast<int>(octMinus.y + 36.0f * scale),
                  std::max(8, static_cast<int>(9.0f * scale)), kPanelInk);
-        DrawText(activeTrack().mono ? "MONO" : "POLY", static_cast<int>(octPlus.x + 13.0f * scale), static_cast<int>(octPlus.y + 36.0f * scale),
+        DrawText(octPlusLabel, static_cast<int>(octPlus.x + 13.0f * scale), static_cast<int>(octPlus.y + 36.0f * scale),
                  std::max(8, static_cast<int>(9.0f * scale)), kPanelInk);
 
         if (gUi.page == ScreenPage::Home || gUi.page == ScreenPage::Edit) {
@@ -1360,33 +1658,56 @@ int main(int argc, char** argv) {
         } else if (gUi.page == ScreenPage::Arp) {
             drawPlaceholderScreen(screen, "ARP", "Note repeat / stutter", "planned performance page");
         } else if (gUi.page == ScreenPage::Seq) {
-            drawPlaceholderScreen(screen, "SEQ", "A / B / C + FM sequencer", "planned next major phase");
+            drawSequencerScreen(screen);
         } else {
             drawPlaceholderScreen(screen, "GLO", "Sampler globals", "storage / MIDI / quality later");
         }
 
         float n1 = 0.0f, n2 = 0.0f, n3 = 0.5f, n4 = 0.5f;
         const auto& at = activeTrack();
-        if (!at.sample.empty()) {
-            if (gUi.editStage == EditStage::Trim) {
-                n1 = static_cast<float>(at.masterStart) / static_cast<float>(at.sample.frames());
-                n2 = static_cast<float>(at.masterEnd) / static_cast<float>(at.sample.frames());
-                n3 = (at.sampler.globalSemitones() + 36.0f) / 72.0f;
-            } else if (at.selectedSlice < at.activeSlices) {
-                const auto& s = slices[at.selectedSlice];
-                n1 = static_cast<float>(s.startFrame) / static_cast<float>(at.sample.frames());
-                n2 = static_cast<float>(s.endFrame) / static_cast<float>(at.sample.frames());
-                n3 = (s.semitones + 36.0f) / 72.0f;
-                n4 = s.gain / 2.0f;
+        const char* k1Label = nullptr;
+        const char* k2Label = nullptr;
+        const char* k3Label = nullptr;
+        const char* k4Label = nullptr;
+        bool k4Highlighted = false;
+
+        if (gUi.page == ScreenPage::Seq) {
+            n1 = static_cast<float>(seqLength - 1) / 63.0f;
+            n2 = seqLength > 1 ? static_cast<float>(seqEdit) / static_cast<float>(seqLength - 1) : 0.0f;
+            n3 = (seqBpm - fm1::Sequencer::kMinBpm) / (fm1::Sequencer::kMaxBpm - fm1::Sequencer::kMinBpm);
+            n4 = static_cast<float>(seqVelocity - 1) / 126.0f;
+            k1Label = "K1 LEN";
+            k2Label = "K2 STEP";
+            k3Label = "K3 BPM";
+            k4Label = "K4 VEL";
+            k4Highlighted = true;
+        } else {
+            if (!at.sample.empty()) {
+                if (gUi.editStage == EditStage::Trim) {
+                    n1 = static_cast<float>(at.masterStart) / static_cast<float>(at.sample.frames());
+                    n2 = static_cast<float>(at.masterEnd) / static_cast<float>(at.sample.frames());
+                    n3 = (at.sampler.globalSemitones() + 36.0f) / 72.0f;
+                } else if (at.selectedSlice < at.activeSlices) {
+                    const auto& s = slices[at.selectedSlice];
+                    n1 = static_cast<float>(s.startFrame) / static_cast<float>(at.sample.frames());
+                    n2 = static_cast<float>(s.endFrame) / static_cast<float>(at.sample.frames());
+                    n3 = (s.semitones + 36.0f) / 72.0f;
+                    n4 = s.gain / 2.0f;
+                }
             }
+            k1Label = gUi.editStage == EditStage::Trim ? "K1 M.START" : "K1 START";
+            k2Label = gUi.editStage == EditStage::Trim ? "K2 M.END" : "K2 END";
+            k3Label = gUi.editStage == EditStage::Trim ? "K3 M.TUNE" : "K3 TUNE";
+            k4Label = gUi.editStage == EditStage::Trim ? "K4 --" : "K4 LEVEL";
+            k4Highlighted = gUi.editStage == EditStage::Chop;
         }
-        drawKnob(kC[0], kR, gUi.editStage == EditStage::Trim ? "K1 M.START" : "K1 START", n1, true);
-        drawKnob(kC[1], kR, gUi.editStage == EditStage::Trim ? "K2 M.END" : "K2 END", n2, true);
-        drawKnob(kC[2], kR, gUi.editStage == EditStage::Trim ? "K3 M.TUNE" : "K3 TUNE", n3, true);
-        drawKnob(kC[3], kR, gUi.editStage == EditStage::Trim ? "K4 --" : "K4 LEVEL", n4, gUi.editStage == EditStage::Chop);
+        drawKnob(kC[0], kR, k1Label, n1, true);
+        drawKnob(kC[1], kR, k2Label, n2, true);
+        drawKnob(kC[2], kR, k3Label, n3, true);
+        drawKnob(kC[3], kR, k4Label, n4, k4Highlighted);
 
         drawButton(topButtons[0], "FX", gUi.page == ScreenPage::Fx);
-        drawButton(topButtons[1], "SEL", at.linkChops);
+        drawButton(topButtons[1], "SEL", gUi.page == ScreenPage::Seq ? false : at.linkChops);
         drawButton(topButtons[2], "ENV", gUi.page == ScreenPage::Env);
         drawButton(topButtons[3], "LFO", gUi.page == ScreenPage::Lfo);
         drawButton(topButtons[4], "EDIT", gUi.page == ScreenPage::Edit);
@@ -1395,16 +1716,18 @@ int main(int argc, char** argv) {
         drawButton(bottomButtons[1], "SAVE", false);
         drawButton(bottomButtons[2], "ARP", gUi.page == ScreenPage::Arp);
         drawButton(bottomButtons[3], "SEQ", gUi.page == ScreenPage::Seq);
-        drawButton(bottomButtons[4], "PLAY/STOP", at.previewPlaying.load());
-        drawButton(bottomButtons[5], "REC", gUi.punchArmed, true);
+        drawButton(bottomButtons[4], "PLAY/STOP", gUi.page == ScreenPage::Seq ? seqRunning : at.previewPlaying.load());
+        drawButton(bottomButtons[5], "REC", gUi.page == ScreenPage::Seq ? seqRecordArmed : gUi.punchArmed, true);
 
         drawPiano(pianoKeys, at);
 
         const int statusSize = std::max(10, static_cast<int>(12.0f * scale));
         DrawText(gUi.status.c_str(), static_cast<int>(device.x + 48.0f * scale),
                  static_cast<int>(device.y + 708.0f * scale), statusSize, kCream);
-        DrawText("SELECT=TRIM/CHOP  PRESETS=8/16/24/MAN  ALGORITHM=ZOOM  OCT-=LINK  OCT+=MONO/POLY",
-                 static_cast<int>(device.x + 565.0f * scale), static_cast<int>(device.y + 708.0f * scale),
+        const char* footer = gUi.page == ScreenPage::Seq
+            ? "SEQ: K1=LEN K2=STEP K3=BPM K4=VEL  OCT-=QNTZ OCT+=MUTE SEL=CLEAR"
+            : "SELECT=TRIM/CHOP  PRESETS=8/16/24/MAN  ALGORITHM=ZOOM  OCT-=LINK  OCT+=MONO/POLY";
+        DrawText(footer, static_cast<int>(device.x + 565.0f * scale), static_cast<int>(device.y + 708.0f * scale),
                  std::max(8, static_cast<int>(9.0f * scale)), kPanelInk);
 
         EndDrawing();

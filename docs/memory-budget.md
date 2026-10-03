@@ -94,3 +94,10 @@ This keeps the B-Boy Edition architecture honest while leaving room to discover 
 ### Master tune cost
 
 MASTER TUNE adds only one floating-point control value per sampler engine in the desktop/reference core (three values total for A/B/C). The eventual fixed-point firmware implementation can store the same state in a few bytes per track. It does not duplicate sample audio or materially change the memory budget.
+
+
+## v0.3 sequencer cost
+
+The v0.3 sequencer deliberately stores events rather than audio. Each sampler track has at most 64 step records containing an active flag, chop index and velocity, plus a few bytes of track state. Even allowing for C++ structure padding, the three-track grid remains in the low-kilobyte range on desktop and can be packed much tighter in firmware. Independent track length, quantise state, BPM, mute and edit cursors do not materially change the audio-memory budget.
+
+The expensive part remains the voices that those events trigger, not the sequence data itself. The real FM-1 port should therefore keep the compact event model and benchmark a shared sampler voice pool.
