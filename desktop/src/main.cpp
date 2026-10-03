@@ -60,7 +60,7 @@ struct TrackState {
     std::size_t viewStart = 0;
     std::size_t viewEnd = 0;
     bool mono = true;
-    bool linkLength = false;
+    bool linkChops = false;
     std::atomic<bool> previewPlaying{false};
     double previewPosition = 0.0;
     std::size_t previewStart = 0;
@@ -380,37 +380,93 @@ void nudgeSliceBoundary(long long deltaFrames, bool moveEnd) {
     std::lock_guard<std::recursive_mutex> lock(gAudioMutex);
     auto& t = activeTrack();
     if (t.sample.empty() || t.selectedSlice >= t.activeSlices) return;
+
     auto slice = t.sampler.slice(t.selectedSlice);
     if (!slice.valid()) return;
-    const std::size_t length = slice.endFrame - slice.startFrame;
 
-    if (t.linkLength) {
+    if (t.linkChops) {
+        // LINK CHOPS treats each internal chop marker as one shared boundary.
+        // Moving the start of this chop therefore moves the end of the previous
+        // chop; moving the end moves the start of the next chop. The outermost
+        // boundaries remain owned by MASTER TRIM.
         if (!moveEnd) {
-            long long newStart = static_cast<long long>(slice.startFrame) + deltaFrames;
-            newStart = std::clamp<long long>(newStart, static_cast<long long>(t.masterStart),
-                static_cast<long long>(t.masterEnd >= length ? t.masterEnd - length : t.masterStart));
-            slice.startFrame = static_cast<std::size_t>(newStart);
-            slice.endFrame = slice.startFrame + length;
+            if (t.selectedSlice == 0) {
+                gUi.status = "LINK CHOPS: first START is MASTER START.";
+                centerViewOn(t, t.masterStart);
+                return;
+            }
+
+            auto previous = t.sampler.slice(t.selectedSlice - 1);
+            const long long minimum = static_cast<long long>(previous.startFrame + 1);
+            const long long maximum = static_cast<long long>(slice.endFrame - 1);
+            if (minimum > maximum) {
+                gUi.status = "LINK CHOPS: no room to move this boundary.";
+                return;
+            }
+            long long boundary = static_cast<long long>(slice.startFrame) + deltaFrames;
+            boundary = std::clamp(boundary, minimum, maximum);
+
+            previous.endFrame = static_cast<std::size_t>(boundary);
+            slice.startFrame = static_cast<std::size_t>(boundary);
+            t.sampler.setSlice(t.selectedSlice - 1, previous);
+            t.sampler.setSlice(t.selectedSlice, slice);
+
+            if (t.chopMode == ChopMode::Manual && t.manualMarkers.size() > t.selectedSlice)
+                t.manualMarkers[t.selectedSlice] = static_cast<std::size_t>(boundary);
+
+            centerViewOn(t, static_cast<std::size_t>(boundary));
+            gUi.status = TextFormat("LINK CHOPS: S%02i END = S%02i START.",
+                                    static_cast<int>(t.selectedSlice),
+                                    static_cast<int>(t.selectedSlice + 1));
         } else {
-            long long newEnd = static_cast<long long>(slice.endFrame) + deltaFrames;
-            newEnd = std::clamp<long long>(newEnd, static_cast<long long>(t.masterStart + length),
-                                           static_cast<long long>(t.masterEnd));
-            slice.endFrame = static_cast<std::size_t>(newEnd);
-            slice.startFrame = slice.endFrame - length;
+            if (t.selectedSlice + 1 >= t.activeSlices) {
+                gUi.status = "LINK CHOPS: last END is MASTER END.";
+                centerViewOn(t, t.masterEnd);
+                return;
+            }
+
+            auto next = t.sampler.slice(t.selectedSlice + 1);
+            const long long minimum = static_cast<long long>(slice.startFrame + 1);
+            const long long maximum = static_cast<long long>(next.endFrame - 1);
+            if (minimum > maximum) {
+                gUi.status = "LINK CHOPS: no room to move this boundary.";
+                return;
+            }
+            long long boundary = static_cast<long long>(slice.endFrame) + deltaFrames;
+            boundary = std::clamp(boundary, minimum, maximum);
+
+            slice.endFrame = static_cast<std::size_t>(boundary);
+            next.startFrame = static_cast<std::size_t>(boundary);
+            t.sampler.setSlice(t.selectedSlice, slice);
+            t.sampler.setSlice(t.selectedSlice + 1, next);
+
+            const std::size_t markerIndex = t.selectedSlice + 1;
+            if (t.chopMode == ChopMode::Manual && t.manualMarkers.size() > markerIndex)
+                t.manualMarkers[markerIndex] = static_cast<std::size_t>(boundary);
+
+            centerViewOn(t, static_cast<std::size_t>(boundary));
+            gUi.status = TextFormat("LINK CHOPS: S%02i END = S%02i START.",
+                                    static_cast<int>(t.selectedSlice + 1),
+                                    static_cast<int>(t.selectedSlice + 2));
         }
     } else if (!moveEnd) {
         long long newStart = static_cast<long long>(slice.startFrame) + deltaFrames;
         newStart = std::clamp<long long>(newStart, static_cast<long long>(t.masterStart),
                                          static_cast<long long>(slice.endFrame - 1));
         slice.startFrame = static_cast<std::size_t>(newStart);
+        t.sampler.setSlice(t.selectedSlice, slice);
+        centerViewOn(t, slice.startFrame);
+        gUi.status = "FREE CHOP START adjusted.";
     } else {
         long long newEnd = static_cast<long long>(slice.endFrame) + deltaFrames;
         newEnd = std::clamp<long long>(newEnd, static_cast<long long>(slice.startFrame + 1),
                                        static_cast<long long>(t.masterEnd));
         slice.endFrame = static_cast<std::size_t>(newEnd);
+        t.sampler.setSlice(t.selectedSlice, slice);
+        centerViewOn(t, slice.endFrame);
+        gUi.status = "FREE CHOP END adjusted.";
     }
-    t.sampler.setSlice(t.selectedSlice, slice);
-    centerViewOn(t, moveEnd ? slice.endFrame : slice.startFrame);
+
     autoAuditionSelected();
 }
 
@@ -985,9 +1041,9 @@ void drawSamplerScreen(Rectangle screen, const TrackState& t,
             const double end = static_cast<double>(s.endFrame) / t.sample.sampleRate;
             DrawText(TextFormat("S%02i %.2f-%.2fs", static_cast<int>(t.selectedSlice + 1), start, end),
                      static_cast<int>(screen.x + 8), static_cast<int>(screen.y + screen.height - 50), 11, kCream);
-            DrawText(TextFormat("T%+.0f LV%.0f%% %s", s.semitones, s.gain * 100.0f, t.linkLength ? "LINK" : "FREE"),
+            DrawText(TextFormat("T%+.0f LV%.0f%% %s", s.semitones, s.gain * 100.0f, t.linkChops ? "LINK" : "FREE"),
                      static_cast<int>(screen.x + 8), static_cast<int>(screen.y + screen.height - 34), 11,
-                     t.linkLength ? kMarker : kScreenGreen);
+                     t.linkChops ? kMarker : kScreenGreen);
         }
     }
 
@@ -1008,7 +1064,7 @@ void setPage(ScreenPage page, const char* status) {
 
 int main(int argc, char** argv) {
     SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT);
-    InitWindow(kInitialWidth, kInitialHeight, "M-VAVE FM-1 B-Boy Edition v0.2.5");
+    InitWindow(kInitialWidth, kInitialHeight, "M-VAVE FM-1 B-Boy Edition v0.2.6");
     SetTargetFPS(60);
 
     for (auto& t : gTracks) t.sampler.setMonophonic(true);
@@ -1178,8 +1234,8 @@ int main(int argc, char** argv) {
         }
 
         if (buttonPressed(octMinus)) {
-            t.linkLength = !t.linkLength;
-            gUi.status = t.linkLength ? "LINK LENGTH ON." : "LINK LENGTH OFF.";
+            t.linkChops = !t.linkChops;
+            gUi.status = t.linkChops ? "LINK CHOPS ON." : "LINK CHOPS OFF.";
         }
         if (buttonPressed(octPlus)) {
             t.mono = !t.mono;
@@ -1230,8 +1286,8 @@ int main(int argc, char** argv) {
 
         if (buttonPressed(topButtons[0])) setPage(ScreenPage::Fx, "FX page reserved for sampler/filter effects.");
         if (buttonPressed(topButtons[1])) {
-            t.linkLength = !t.linkLength;
-            gUi.status = t.linkLength ? "LINK LENGTH ON." : "LINK LENGTH OFF.";
+            t.linkChops = !t.linkChops;
+            gUi.status = t.linkChops ? "LINK CHOPS ON." : "LINK CHOPS OFF.";
         }
         if (buttonPressed(topButtons[2])) setPage(ScreenPage::Env, "ENV page reserved for amp/filter envelopes.");
         if (buttonPressed(topButtons[3])) setPage(ScreenPage::Lfo, "LFO page reserved for modulation.");
@@ -1274,7 +1330,7 @@ int main(int argc, char** argv) {
             ? 0.0f : 1.0f - static_cast<float>(activeTrack().viewEnd - activeTrack().viewStart) / static_cast<float>(activeTrack().sample.frames());
         drawKnob(algorithmC, leftKnobR, "ALGORITHM", zoomNorm);
 
-        drawButton(octMinus, "OCT-", activeTrack().linkLength);
+        drawButton(octMinus, "OCT-", activeTrack().linkChops);
         drawButton(octPlus, "OCT+", activeTrack().mono);
         DrawText("LINK", static_cast<int>(octMinus.x + 17.0f * scale), static_cast<int>(octMinus.y + 36.0f * scale),
                  std::max(8, static_cast<int>(9.0f * scale)), kPanelInk);
@@ -1317,7 +1373,7 @@ int main(int argc, char** argv) {
         drawKnob(kC[3], kR, gUi.editStage == EditStage::Trim ? "K4 --" : "K4 LEVEL", n4, gUi.editStage == EditStage::Chop);
 
         drawButton(topButtons[0], "FX", gUi.page == ScreenPage::Fx);
-        drawButton(topButtons[1], "SEL", at.linkLength);
+        drawButton(topButtons[1], "SEL", at.linkChops);
         drawButton(topButtons[2], "ENV", gUi.page == ScreenPage::Env);
         drawButton(topButtons[3], "LFO", gUi.page == ScreenPage::Lfo);
         drawButton(topButtons[4], "EDIT", gUi.page == ScreenPage::Edit);

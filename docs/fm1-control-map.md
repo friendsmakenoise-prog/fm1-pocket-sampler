@@ -10,7 +10,7 @@ The desktop simulator deliberately maps sampler functions onto the physical cont
 | SELECT | Toggle Edit sub-page: MASTER TRIM / CHOP EDIT |
 | PRESETS | 8 / 16 / 24 / MAN chop mode |
 | ALGORITHM | Waveform zoom, auto-centred on current edit focus |
-| OCT- | LINK LENGTH toggle for slice edits |
+| OCT- | LINK CHOPS toggle |
 | OCT+ | MONO/POLY toggle for current Sample A/B/C track |
 | PLAY/STOP | Play/stop current track's master-trimmed source region |
 | REC | Arm/disarm manual punch chopping |
@@ -37,28 +37,43 @@ Chops are generated only inside the master trim region.
 | K3 | Selected chop tune |
 | K4 | Selected chop level |
 
+With LINK CHOPS enabled, K1/K2 move shared neighbouring boundaries. With LINK CHOPS disabled, they edit the selected slice independently.
+
 ## 27-key bed
 
-- Keys 1-24: chop triggers / chop selection.
-- Key 25: SAMPLE A.
-- Key 26: SAMPLE B.
-- Key 27: SAMPLE C.
+### MASTER TRIM
 
-Each sample track owns an independent source sample, master trim, chop layout and MONO/POLY state. The three tracks share the overall memory budget in the eventual firmware.
+The first five white keys are contextual audition controls:
+
+1. PRE
+2. GATE
+3. 1SHOT
+4. LOOP
+5. TAIL
+
+The final three physical keys remain SAMPLE A / B / C selectors.
+
+### CHOP EDIT
+
+- Keys 1-24: chop trigger / chop selection
+- Key 25: SAMPLE A
+- Key 26: SAMPLE B
+- Key 27: SAMPLE C
+
+Each sample track owns an independent source sample, master trim, chop layout and MONO/POLY state. The three tracks share the overall memory and voice budget in eventual firmware.
 
 ## Auto-centred editing
 
 The hardware has no spare pan control in the sampler workflow. Therefore ALGORITHM zoom centres itself on the current edit target:
 
-- MASTER TRIM: midpoint of the master region; moving START/END centres on the boundary being edited.
-- CHOP EDIT: selected chop midpoint; moving START/END centres on that boundary.
-- selecting another chop recentres the view without changing zoom level.
+- MASTER TRIM: midpoint of the master region; moving START/END centres on the boundary being edited
+- CHOP EDIT: selected chop midpoint; moving START/END centres on that boundary
+- selecting another chop recentres the view without changing zoom level
 
 Mouse panning in the desktop build is only a development convenience.
 
+## Desktop QWERTY mapping
 
-## v0.2.5 MASTER TRIM keybed audition
+The 24 chromatic shortcuts begin on F and mirror the visual FM-1 bed:
 
-While MASTER TRIM is selected, chop triggering is disabled so trim audition cannot accidentally enter CHOP mode. The first five white keys are contextual audition commands: PRE, GATE, 1SHOT, LOOP and TAIL. The final three keys continue to select SAMPLE A/B/C.
-
-Desktop QWERTY chromatic mapping begins on F and mirrors the visual bed: `Z S X D C F V B H N J M | Q 2 W 3 E 5 R T 6 Y 7 U`.
+`Z S X D C F V B H N J M | Q 2 W 3 E 5 R T 6 Y 7 U`

@@ -1,4 +1,4 @@
-# v0.2.5 — Master Trim Audition + Keybed Map Fix
+# v0.2.6 — Master Trim Audition + Keybed Map Fix
 
 - MASTER TRIM no longer jumps back to CHOP when a playable key is pressed.
 - First five white keys become dedicated trim-audition tools:
