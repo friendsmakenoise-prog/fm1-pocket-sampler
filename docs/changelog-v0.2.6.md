@@ -22,3 +22,8 @@
 - Marked 8 voices per A/B/C sampler as a desktop convenience rather than a firmware promise.
 - Kept MP3/FLAC/OGG decoding explicitly desktop-side.
 - Documented the need to avoid extra full-screen framebuffers and frame-by-frame boot-animation storage.
+## Keybed hotfix
+
+- Corrected physical/chop key 18 (A# in the second F-based octave) to use desktop key `4`, not `5`.
+- The complete second-octave desktop map is now `Q 2 W 3 E 4 R T 6 Y 7 U`.
+

@@ -23,6 +23,8 @@ public:
     void stopAllVoices() noexcept;
     void setMonophonic(bool enabled) noexcept { monophonic_ = enabled; }
     [[nodiscard]] bool monophonic() const noexcept { return monophonic_; }
+    void setGlobalSemitones(float semitones) noexcept;
+    [[nodiscard]] float globalSemitones() const noexcept { return globalSemitones_; }
 
     void render(float* output, std::size_t frames, uint32_t outputSampleRate);
     void renderAdd(float* output, std::size_t frames, uint32_t outputSampleRate);
@@ -43,6 +45,7 @@ private:
     std::array<Voice, kMaxVoices> voices_{};
     std::size_t nextVoice_ = 0;
     bool monophonic_ = true;
+    float globalSemitones_ = 0.0f;
 };
 
 } // namespace fm1

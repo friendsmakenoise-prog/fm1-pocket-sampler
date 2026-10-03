@@ -1,0 +1,2 @@
+/Library/Developer/CommandLineTools/usr/bin/ar qc libfm1_core.a CMakeFiles/fm1_core.dir/core/src/WavFile.cpp.o CMakeFiles/fm1_core.dir/core/src/Sampler.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/ranlib libfm1_core.a

@@ -46,6 +46,14 @@ int main() {
     sampler.noteOn(0);
     sampler.noteOn(1); // now both voices may overlap.
 
+    // Master/track tuning is additive to per-slice tuning and clamped to a
+    // sensible hardware-oriented range.
+    sampler.setGlobalSemitones(12.0f);
+    assert(std::abs(sampler.globalSemitones() - 12.0f) < 0.0001f);
+    sampler.setGlobalSemitones(99.0f);
+    assert(std::abs(sampler.globalSemitones() - 36.0f) < 0.0001f);
+    sampler.setGlobalSemitones(0.0f);
+
     sampler.stopAllVoices();
 
     std::cout << "Sampler tests passed\n";

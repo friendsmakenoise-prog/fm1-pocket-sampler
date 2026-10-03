@@ -1,0 +1,24 @@
+
+# Consider dependencies only in project.
+set(CMAKE_DEPENDS_IN_PROJECT_ONLY OFF)
+
+# The set of languages for which implicit dependencies are needed:
+set(CMAKE_DEPENDS_LANGUAGES
+  )
+
+# The set of dependency files which are needed:
+set(CMAKE_DEPENDS_DEPENDENCY_FILES
+  "/Users/frien/Documents/GitHub/fm1-pocket-sampler/core/src/Sampler.cpp" "CMakeFiles/fm1_core.dir/core/src/Sampler.cpp.o" "gcc" "CMakeFiles/fm1_core.dir/core/src/Sampler.cpp.o.d"
+  "/Users/frien/Documents/GitHub/fm1-pocket-sampler/core/src/WavFile.cpp" "CMakeFiles/fm1_core.dir/core/src/WavFile.cpp.o" "gcc" "CMakeFiles/fm1_core.dir/core/src/WavFile.cpp.o.d"
+  )
+
+# Targets to which this target links which contain Fortran sources.
+set(CMAKE_Fortran_TARGET_LINKED_INFO_FILES
+  )
+
+# Targets to which this target links which contain Fortran sources.
+set(CMAKE_Fortran_TARGET_FORWARD_LINKED_INFO_FILES
+  )
+
+# Fortran module output directory.
+set(CMAKE_Fortran_TARGET_MODULE_DIR "")

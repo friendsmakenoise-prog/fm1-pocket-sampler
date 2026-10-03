@@ -10,5 +10,5 @@
 - PLAY/STOP remains a convenient one-shot master preview / stop control.
 - K3 and K4 are deliberately left free in MASTER TRIM.
 - Corrected the desktop QWERTY mapping so the displayed F-based chromatic keyboard and computer keys line up:
-  `Z S X D C F V B H N J M | Q 2 W 3 E 5 R T 6 Y 7 U`.
+  `Z S X D C F V B H N J M | Q 2 W 3 E 4 R T 6 Y 7 U`.
 - Retains v0.2.4 chop-marker visibility and auto-centred chop zoom.

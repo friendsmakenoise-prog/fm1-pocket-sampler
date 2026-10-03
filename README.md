@@ -17,7 +17,7 @@ Treat the FM-1 like a tiny late-1990s sampler that happens to contain an FM synt
 
 The Akai MPC-style chop workflow is a reference point, but the interface is being redesigned around the controls actually available on the FM-1.
 
-## Current milestone: v0.2.6 — clean checkpoint
+## Current milestone: v0.2.7 — master tune
 
 The desktop sandbox includes:
 
@@ -27,6 +27,7 @@ The desktop sandbox includes:
 - three sample tracks selected by the final three physical keys
 - independent source sample, trim, chop map and MONO/POLY state for A/B/C
 - master START / END trim before chop generation
+- per-track **MASTER TUNE** before chopping; slice tuning remains relative to it
 - MASTER TRIM audition tools: **PRE / GATE / 1SHOT / LOOP / TAIL**
 - 8 / 16 / 24 / MANUAL chop modes
 - manual punch-in markers while the master-trim preview is playing
@@ -63,7 +64,7 @@ rm -rf build
 
 The build helper explicitly uses the active macOS SDK, builds the app, runs tests and opens the resulting `.app`.
 
-## One-time repository cleanup for v0.2.6
+## One-time repository cleanup (introduced in v0.2.6)
 
 An earlier build directory was accidentally committed. After merging this update, run:
 
@@ -80,7 +81,8 @@ Then commit and push the removals shown in GitHub Desktop. `build/` and macOS `.
 - **PRESETS** — 8 / 16 / 24 / MANUAL chops
 - **ALGORITHM** — zoom, automatically centred on the current edit focus
 - **K1 / K2** — master start/end in TRIM, selected chop start/end in CHOP
-- **K3 / K4** — selected chop tune / level in CHOP
+- **K3** — MASTER TUNE in TRIM; selected chop tune in CHOP
+- **K4** — reserved in TRIM; selected chop level in CHOP
 - **OCT-** — LINK CHOPS on/off
 - **OCT+** — current sample track MONO/POLY
 - **PLAY/STOP** — one-shot audition / stop for the master-trimmed source

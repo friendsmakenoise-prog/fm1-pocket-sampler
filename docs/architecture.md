@@ -73,3 +73,8 @@ Firmware target direction:
 - preserve the FM synth as a fourth sound source where CPU/RAM permit
 
 See `memory-budget.md` for the resource guardrails.
+
+
+### Global track pitch
+
+The portable sampler core carries a per-engine `globalSemitones` value. SAMPLE A/B/C each own one Sampler instance, so master tuning stays independent per sample track. Rendering combines `globalSemitones + slice.semitones` before calculating the playback increment. MASTER TRIM preview uses the same pitch ratio, keeping audition and chopped playback consistent.

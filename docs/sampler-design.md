@@ -82,3 +82,8 @@ With LINK CHOPS disabled, START/END can be adjusted independently for deliberate
 3. resampling/bounce
 4. memory-efficient on-device sample format
 5. small, purposeful FX set
+
+
+## Master tune
+
+Each SAMPLE A/B/C track owns a master semitone offset. MASTER TRIM K3 adjusts it before chopping. The master offset is applied at playback time and is additive to each slice's own CHOP EDIT tune value, so the user can pitch the whole source first and still detune individual chops later. This is classic sampler-style pitch/speed behaviour, not independent time-stretch.

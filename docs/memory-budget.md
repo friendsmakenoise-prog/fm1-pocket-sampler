@@ -89,3 +89,8 @@ Until the physical FM-1 is profiled, design new features as if:
 5. destructive trim/resample/bounce is a feature, not merely a compromise.
 
 This keeps the B-Boy Edition architecture honest while leaving room to discover a larger usable budget later.
+
+
+### Master tune cost
+
+MASTER TUNE adds only one floating-point control value per sampler engine in the desktop/reference core (three values total for A/B/C). The eventual fixed-point firmware implementation can store the same state in a few bytes per track. It does not duplicate sample audio or materially change the memory budget.

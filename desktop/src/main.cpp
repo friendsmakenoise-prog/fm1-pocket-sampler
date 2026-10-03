@@ -93,7 +93,7 @@ const std::array<int, kMaxSlices> kTriggerKeys = {
     // F F# G G# A A# B C C# D D# E | F F# G G# A A# B C C# D D# E
     KEY_Z, KEY_S, KEY_X, KEY_D, KEY_C, KEY_F,
     KEY_V, KEY_B, KEY_H, KEY_N, KEY_J, KEY_M,
-    KEY_Q, KEY_TWO, KEY_W, KEY_THREE, KEY_E, KEY_FIVE,
+    KEY_Q, KEY_TWO, KEY_W, KEY_THREE, KEY_E, KEY_FOUR,
     KEY_R, KEY_T, KEY_SIX, KEY_Y, KEY_SEVEN, KEY_U
 };
 
@@ -512,6 +512,15 @@ void tuneSelected(float delta) {
     autoAuditionSelected();
 }
 
+void tuneMaster(float delta) {
+    std::lock_guard<std::recursive_mutex> lock(gAudioMutex);
+    auto& t = activeTrack();
+    if (t.sample.empty()) return;
+    const float tuned = std::clamp(t.sampler.globalSemitones() + delta, -36.0f, 36.0f);
+    t.sampler.setGlobalSemitones(tuned);
+    gUi.status = TextFormat("MASTER TUNE %+.0f st.", tuned);
+}
+
 void gainSelected(float delta) {
     std::lock_guard<std::recursive_mutex> lock(gAudioMutex);
     auto& t = activeTrack();
@@ -638,7 +647,8 @@ void audioCallback(void* bufferData, unsigned int frames) {
 
     for (auto& t : gTracks) {
         if (t.sample.empty() || !t.previewPlaying.load()) continue;
-        const double increment = static_cast<double>(t.sample.sampleRate) / static_cast<double>(kOutputSampleRate);
+        const double masterPitchRatio = std::pow(2.0, static_cast<double>(t.sampler.globalSemitones()) / 12.0);
+        const double increment = (static_cast<double>(t.sample.sampleRate) / static_cast<double>(kOutputSampleRate)) * masterPitchRatio;
         for (unsigned int frame = 0; frame < frames; ++frame) {
             if ((t.auditionMode == AuditionMode::Gate || t.auditionMode == AuditionMode::Loop) && !t.auditionGateHeld) {
                 stopPreview(t);
@@ -676,6 +686,7 @@ std::string loadSampleIntoActiveTrack(const std::string& path) {
         t.sample = std::move(loaded);
         t.sampler.setSample(&t.sample);
         t.sampler.setMonophonic(t.mono);
+        t.sampler.setGlobalSemitones(0.0f);
         t.masterStart = 0;
         t.masterEnd = frames;
         t.selectedSlice = 0;
@@ -1031,10 +1042,10 @@ void drawSamplerScreen(Rectangle screen, const TrackState& t,
         if (gUi.editStage == EditStage::Trim) {
             const double start = static_cast<double>(t.masterStart) / t.sample.sampleRate;
             const double end = static_cast<double>(t.masterEnd) / t.sample.sampleRate;
-            DrawText(TextFormat("MASTER %.2f-%.2fs", start, end), static_cast<int>(screen.x + 8),
+            DrawText(TextFormat("MASTER %.2f-%.2fs  T%+.0f", start, end, t.sampler.globalSemitones()), static_cast<int>(screen.x + 8),
                      static_cast<int>(screen.y + screen.height - 50), 11, kCream);
-            DrawText("K1 START K2 END | PRE GATE 1SHOT LOOP TAIL", static_cast<int>(screen.x + 8),
-                     static_cast<int>(screen.y + screen.height - 34), 9, kScreenGreen);
+            DrawText("K1 START K2 END K3 TUNE | PRE GATE 1SHOT LOOP TAIL", static_cast<int>(screen.x + 8),
+                     static_cast<int>(screen.y + screen.height - 34), 8, kScreenGreen);
         } else if (t.selectedSlice < t.activeSlices) {
             const auto& s = slices[t.selectedSlice];
             const double start = static_cast<double>(s.startFrame) / t.sample.sampleRate;
@@ -1064,7 +1075,7 @@ void setPage(ScreenPage page, const char* status) {
 
 int main(int argc, char** argv) {
     SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT);
-    InitWindow(kInitialWidth, kInitialHeight, "M-VAVE FM-1 B-Boy Edition v0.2.6");
+    InitWindow(kInitialWidth, kInitialHeight, "M-VAVE FM-1 B-Boy Edition v0.2.7");
     SetTargetFPS(60);
 
     for (auto& t : gTracks) t.sampler.setMonophonic(true);
@@ -1226,6 +1237,7 @@ int main(int argc, char** argv) {
         if (gUi.editStage == EditStage::Trim) {
             if (k1Delta != 0) nudgeMasterBoundary(static_cast<long long>(editStep) * k1Delta, false);
             if (k2Delta != 0) nudgeMasterBoundary(static_cast<long long>(editStep) * k2Delta, true);
+            if (k3Delta != 0) tuneMaster(static_cast<float>(k3Delta));
         } else {
             if (k1Delta != 0) nudgeSliceBoundary(static_cast<long long>(editStep) * k1Delta, false);
             if (k2Delta != 0) nudgeSliceBoundary(static_cast<long long>(editStep) * k2Delta, true);
@@ -1359,6 +1371,7 @@ int main(int argc, char** argv) {
             if (gUi.editStage == EditStage::Trim) {
                 n1 = static_cast<float>(at.masterStart) / static_cast<float>(at.sample.frames());
                 n2 = static_cast<float>(at.masterEnd) / static_cast<float>(at.sample.frames());
+                n3 = (at.sampler.globalSemitones() + 36.0f) / 72.0f;
             } else if (at.selectedSlice < at.activeSlices) {
                 const auto& s = slices[at.selectedSlice];
                 n1 = static_cast<float>(s.startFrame) / static_cast<float>(at.sample.frames());
@@ -1369,7 +1382,7 @@ int main(int argc, char** argv) {
         }
         drawKnob(kC[0], kR, gUi.editStage == EditStage::Trim ? "K1 M.START" : "K1 START", n1, true);
         drawKnob(kC[1], kR, gUi.editStage == EditStage::Trim ? "K2 M.END" : "K2 END", n2, true);
-        drawKnob(kC[2], kR, gUi.editStage == EditStage::Trim ? "K3 --" : "K3 TUNE", n3, gUi.editStage == EditStage::Chop);
+        drawKnob(kC[2], kR, gUi.editStage == EditStage::Trim ? "K3 M.TUNE" : "K3 TUNE", n3, true);
         drawKnob(kC[3], kR, gUi.editStage == EditStage::Trim ? "K4 --" : "K4 LEVEL", n4, gUi.editStage == EditStage::Chop);
 
         drawButton(topButtons[0], "FX", gUi.page == ScreenPage::Fx);

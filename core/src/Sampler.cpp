@@ -49,6 +49,10 @@ void Sampler::noteOn(std::size_t sliceIndex, float velocity) {
     voice.gateHeld = true;
 }
 
+void Sampler::setGlobalSemitones(float semitones) noexcept {
+    globalSemitones_ = std::clamp(semitones, -36.0f, 36.0f);
+}
+
 void Sampler::noteOff(std::size_t sliceIndex) {
     for (auto& voice : voices_) {
         if (voice.active && voice.sliceIndex == sliceIndex) voice.gateHeld = false;
@@ -70,7 +74,8 @@ void Sampler::renderInternal(float* output, std::size_t frames, uint32_t outputS
     for (auto& voice : voices_) {
         if (!voice.active) continue;
         const Slice& s = slices_[voice.sliceIndex];
-        const double pitchRatio = std::pow(2.0, static_cast<double>(s.semitones) / 12.0);
+        const double totalSemitones = static_cast<double>(globalSemitones_ + s.semitones);
+        const double pitchRatio = std::pow(2.0, totalSemitones / 12.0);
         const double increment = (static_cast<double>(sample_->sampleRate) / outputSampleRate) * pitchRatio;
 
         for (std::size_t frame = 0; frame < frames && voice.active; ++frame) {

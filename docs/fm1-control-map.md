@@ -23,10 +23,10 @@ The desktop simulator deliberately maps sampler functions onto the physical cont
 |---|---|
 | K1 | Master sample start |
 | K2 | Master sample end |
-| K3 | Reserved |
+| K3 | Master tune (semitones, affects audition and all chops on this sample track) |
 | K4 | Reserved |
 
-Chops are generated only inside the master trim region.
+Chops are generated only inside the master trim region. MASTER TUNE is track-level: it changes playback pitch/speed for the source and every chop, while each chop can still add its own relative tune offset in CHOP EDIT.
 
 ### CHOP EDIT
 
@@ -76,4 +76,4 @@ Mouse panning in the desktop build is only a development convenience.
 
 The 24 chromatic shortcuts begin on F and mirror the visual FM-1 bed:
 
-`Z S X D C F V B H N J M | Q 2 W 3 E 5 R T 6 Y 7 U`
+`Z S X D C F V B H N J M | Q 2 W 3 E 4 R T 6 Y 7 U`
